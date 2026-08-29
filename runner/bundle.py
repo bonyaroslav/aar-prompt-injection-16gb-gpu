@@ -13,7 +13,10 @@ def write_bundle(bundle_dir: Path, contents: dict[str, str]) -> None:
     missing = [name for name in BUNDLE_FILES if name not in contents]
     if missing:
         raise ValueError(f"missing required bundle files: {missing}")
-    bundle_dir.mkdir(parents=True, exist_ok=False)
+    # exist_ok=True: some stages (e.g. training) write extra content -- checkpoint
+    # directories -- into bundle_dir before finalization. Duplicate-run-id rejection is
+    # enforced earlier, by the storage adapter's new_run_dir, not by this mkdir.
+    bundle_dir.mkdir(parents=True, exist_ok=True)
     for name in BUNDLE_FILES:
         (bundle_dir / name).write_text(contents[name], encoding="utf-8")
 
