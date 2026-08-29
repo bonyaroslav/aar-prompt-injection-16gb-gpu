@@ -22,6 +22,9 @@ from pathlib import Path
 from protocol.validate_manifest import load as load_manifest
 from runner.bundle import write_bundle, finalize_bundle
 from runner.fakes import OutOfMemoryError
+from runner.core import (
+    _adapter_command, _adapter_environment, _adapter_events, _adapter_metadata, _adapter_notes,
+)
 
 APPROVED_OOM_FALLBACK = "single_oom_sequence_length_2048_to_1536_then_full_restart"
 OOM_FALLBACK_SEQUENCE_LENGTH = 1536
@@ -101,6 +104,7 @@ def run_training(manifest_path, *, trainer, telemetry, storage, seed: int,
         epoch += 1
 
     telemetry_rows = telemetry.stop()
+    log_lines.extend(_adapter_events(trainer, telemetry))
     log_lines.append(f"finished training run {run_id} outcome={outcome}")
 
     command = f"{sys.executable} -m runner.training --manifest {manifest_path} --run-id {run_id} --seed {seed}"
@@ -118,27 +122,32 @@ def run_training(manifest_path, *, trainer, telemetry, storage, seed: int,
     if outcome == "failed":
         notes += f"\n**Preserved failure evidence:** {failure_reason}\n"
 
-    contents = {
-        "manifest.yaml": json.dumps({
+    manifest_record = {
             "run_id": run_id, "stage": "training", "outcome": outcome,
             "protocol_version": manifest["protocol_version"],
             "upstream_commit": manifest["upstream"]["commit"],
             "model_revision": manifest["model"]["revision"],
             "seed": seed,
-        }, indent=2, sort_keys=True),
-        "command.sh": f"#!/usr/bin/env bash\nset -euo pipefail\n{command}\n",
+    }
+    manifest_record.update(_adapter_metadata(trainer, telemetry))
+    contents = {
+        "manifest.yaml": json.dumps(manifest_record, indent=2, sort_keys=True),
+        "command.sh": (
+            "#!/usr/bin/env bash\nset -euo pipefail\n"
+            f"{_adapter_command(command, trainer, telemetry)}\n"
+        ),
         "config.yaml": json.dumps(training_cfg, indent=2, sort_keys=True),
-        "environment.txt": "\n".join([
+        "environment.txt": _adapter_environment(telemetry, "\n".join([
             f"python={platform.python_version()}",
             f"platform={platform.platform()}",
             "gpu=none (fake adapters; no real GPU or model weights used)",
-        ]) + "\n",
+        ]) + "\n", trainer),
         "metrics.json": json.dumps(metrics, indent=2, sort_keys=True),
         "execution.log": "\n".join(log_lines) + "\n",
         "gpu.csv": "t,vram_mb,util_pct\n" + "\n".join(
             f"{row['t']},{row['vram_mb']},{row['util_pct']}" for row in telemetry_rows
         ) + "\n",
-        "notes.md": notes,
+        "notes.md": _adapter_notes("training", notes, trainer, telemetry),
     }
     write_bundle(bundle_dir, contents)
     checksums = finalize_bundle(bundle_dir)

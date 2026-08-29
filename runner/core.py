@@ -65,7 +65,7 @@ def _run_benchmark(name: str, cfg: dict, *, model, dataset, scorer) -> tuple[dic
         item_scores[item["id"]] = scorer.score(name, item, output, cfg)
     values = [v["score"] for v in item_scores.values()]
     aggregate = {"metric": cfg["metric"], "value": (sum(values) / len(values)) if values else None}
-    return {"items": item_scores, "aggregate": aggregate}, sample_count
+    return {"items": item_scores, "aggregate": aggregate}, len(items)
 
 def _run_held_out_injecagent(cfg: dict, *, model, dataset, scorer, sealer, validity_rules: str, label: str,
                               freeze: bool = True) -> dict:
@@ -110,6 +110,48 @@ def read_held_out_result(sealer, selection_record: dict) -> dict:
     """
     return sealer.reveal(selection_record)
 
+def _adapter_environment(telemetry, fake_default: str, *adapters) -> str:
+    capture = getattr(telemetry, "environment_text", None)
+    text = capture() if callable(capture) else fake_default
+    lines = []
+    for adapter in adapters:
+        value = getattr(adapter, "environment_lines", ())
+        value = value() if callable(value) else value
+        lines.extend(str(line) for line in (value or ()))
+    if lines:
+        text = text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+    return text
+
+def _adapter_events(*adapters) -> list[str]:
+    events = []
+    for adapter in adapters:
+        value = getattr(adapter, "events", ())
+        value = value() if callable(value) else value
+        events.extend(str(event) for event in (value or ()))
+    return events
+
+def _adapter_metadata(*adapters) -> dict:
+    metadata = {}
+    for adapter in adapters:
+        capture = getattr(adapter, "manifest_metadata", None)
+        if callable(capture):
+            metadata.update(capture())
+    return metadata
+
+def _adapter_notes(stage: str, fake_default: str, *adapters) -> str:
+    for adapter in adapters:
+        capture = getattr(adapter, "notes_text", None)
+        if callable(capture):
+            return capture(stage)
+    return fake_default
+
+def _adapter_command(fake_default: str, *adapters) -> str:
+    for adapter in adapters:
+        value = getattr(adapter, "command_text", None)
+        if value:
+            return str(value)
+    return fake_default
+
 def run_baseline(manifest_path, *, model, dataset, scorer, telemetry, storage, held_out_sealer,
                   run_id: str | None = None, clock=time.time) -> RunResult:
     manifest = load_manifest(manifest_path)
@@ -140,29 +182,38 @@ def run_baseline(manifest_path, *, model, dataset, scorer, telemetry, storage, h
     log_lines.append(f"sealed injecagent: candidates={injecagent_cfg['candidate_count']} label=baseline digest={receipt['digest']}")
 
     telemetry_rows = telemetry.stop()
+    log_lines.extend(_adapter_events(model, dataset, scorer, telemetry))
     log_lines.append(f"finished baseline run {run_id}")
 
     command = f"{sys.executable} -m runner.core --manifest {manifest_path} --stage baseline --run-id {run_id}"
-    contents = {
-        "manifest.yaml": json.dumps({
+    manifest_record = {
             "run_id": run_id, "stage": "baseline",
             "protocol_version": manifest["protocol_version"],
             "upstream_commit": manifest["upstream"]["commit"],
             "model_revision": manifest["model"]["revision"],
-        }, indent=2, sort_keys=True),
-        "command.sh": f"#!/usr/bin/env bash\nset -euo pipefail\n{command}\n",
+    }
+    manifest_record.update(_adapter_metadata(model, dataset, scorer, telemetry))
+    contents = {
+        "manifest.yaml": json.dumps(manifest_record, indent=2, sort_keys=True),
+        "command.sh": (
+            "#!/usr/bin/env bash\nset -euo pipefail\n"
+            f"{_adapter_command(command, model, dataset, scorer, telemetry)}\n"
+        ),
         "config.yaml": json.dumps(effective_eval_config(manifest, None), indent=2, sort_keys=True),
-        "environment.txt": "\n".join([
+        "environment.txt": _adapter_environment(telemetry, "\n".join([
             f"python={platform.python_version()}",
             f"platform={platform.platform()}",
             "gpu=none (fake adapters; no real GPU or model weights used)",
-        ]) + "\n",
+        ]) + "\n", model, dataset, scorer),
         "metrics.json": json.dumps(metrics, indent=2, sort_keys=True),
         "execution.log": "\n".join(log_lines) + "\n",
         "gpu.csv": "t,vram_mb,util_pct\n" + "\n".join(
             f"{row['t']},{row['vram_mb']},{row['util_pct']}" for row in telemetry_rows
         ) + "\n",
-        "notes.md": "# Baseline run notes\n\nFake adapters only: no GPU, no model weights, no dataset downloads.\n",
+        "notes.md": _adapter_notes(
+            "baseline", "# Baseline run notes\n\nFake adapters only: no GPU, no model weights, no dataset downloads.\n",
+            model, dataset, scorer, telemetry,
+        ),
     }
     write_bundle(bundle_dir, contents)
     checksums = finalize_bundle(bundle_dir)
