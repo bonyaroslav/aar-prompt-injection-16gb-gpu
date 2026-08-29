@@ -3,6 +3,20 @@
   "upstream_tree": "00f1edb9193487e7e306177709b1760be180d7ac",
   "lookup": "2026-08-29; git ls-remote https://huggingface.co/Qwen/Qwen3.5-2B refs/heads/main",
   "model_revision": "15852e8c16360a2fea060d615a32b45270f8a8fc",
+  "injecagent_source": {
+    "repository": "https://github.com/uiuc-kang-lab/InjecAgent",
+    "note": "scripts/publish_suite.py clones this with --depth 1 and no commit pin at fetch time; this is a study-side fingerprint of what was current at protocol-freeze, not a pin enforced by upstream code. The Phase 2 runner must record the actually-cloned commit per run rather than assume this value holds.",
+    "lookup": "2026-08-29; git ls-remote https://github.com/uiuc-kang-lab/InjecAgent HEAD",
+    "commit_at_freeze": "f19c9f2c79a41046eb13c03c51a24c567a8ffa07"
+  },
+  "environment_deviations": {
+    "numpy_installed": "2.5.2",
+    "numpy_pinned_by_upstream": "<2.0.0",
+    "torch_installed": "2.8.0+cu128",
+    "transformers_installed": "5.16.1",
+    "unsloth": "unavailable (NameError on standalone import); manifest already declares plain PEFT/TRL QLoRA, not an Unsloth-accelerated path",
+    "see": "protocol/deviations.md#environment-deviations-from-pyprojecttoml"
+  },
   "files_sha256": {
     "REPRODUCE.md": "1c2fbaa43358f8d72365813205291b6c7ea613daf7249b9bfb2df9a9c2630916",
     "scripts/axis/prompt_injection.env": "c40603af12fc45613d719f345978475664afb28ad7c486f17b6249ea2ef4e6e5",
