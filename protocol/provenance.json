@@ -1,0 +1,24 @@
+{
+  "upstream_commit": "1899ad64fbfbc65790d259471cc4bf4de9437aa9",
+  "upstream_tree": "00f1edb9193487e7e306177709b1760be180d7ac",
+  "lookup": "2026-08-29; git ls-remote https://huggingface.co/Qwen/Qwen3.5-2B refs/heads/main",
+  "model_revision": "15852e8c16360a2fea060d615a32b45270f8a8fc",
+  "files_sha256": {
+    "REPRODUCE.md": "1c2fbaa43358f8d72365813205291b6c7ea613daf7249b9bfb2df9a9c2630916",
+    "scripts/axis/prompt_injection.env": "c40603af12fc45613d719f345978475664afb28ad7c486f17b6249ea2ef4e6e5",
+    "aar/benchmarks/_injecagent_src.py": "c72a84ceba2170c68e33d083169d87a462b5657f2e0b26866edea43a0e49a274",
+    "aar/benchmarks/open_prompt_injection/benchmark.py": "a57fa6d90fc8427bdc9991bd2c6d38ed9eae017573df606daf387ce3e3bd9084",
+    "aar/benchmarks/tensor_trust_hijack/benchmark.py": "2a6e564d40ee49fad9c3fac02709269c86bbc486489547eed12ee838012b7421",
+    "aar/benchmarks/tensor_trust_extract/benchmark.py": "736c5f5cebdad16e0951222d923fdcd7da9739e532902450b78fbc5eb1f54e54",
+    "aar/benchmarks/injecagent/benchmark.py": "f594238d61029e057b40ba0b156fc62b4a1011e68cdc8096606849a008d53a83",
+    "aar/benchmarks/mmlu/benchmark.py": "09918d34ed66e55a06bff5e28fa435cf012520a9308facbd49e86aec661c30f6",
+    "aar/benchmarks/gsm8k/benchmark.py": "71aafc37a9698e86520246c0a036f6845f177a209d0003b8be6cc7cebee56333",
+    "aar/benchmarks/ifeval/benchmark.py": "dd469662fa14d95570649f20a44c5f5e519f86b3bb981c5d87679da306d57f44",
+    "aar/eval_pod/models.py": "a3cfd3ab9cbe5c1369bdf679d843933be784de7983dd61b3dcee695f9949d45b",
+    "aar/eval_pod/run_eval.py": "5b49eaefa6bbc7fcc351a3230990db171f6355fa9cc8c78df606eb4131ef7dbd",
+    "scripts/publish_suite.py": "a8a61ef86deefbbfa22fb2b74bb03b794f8afb747be88fd49ab7fb80f0a141e0",
+    "benchmark_docs/prompt_injection/baseline.json": "dab7f1aaa8c2e648fd72fda95d94c7043d890e87ccd3fec57e44a5b4646ee920",
+    "benchmark_docs/prompt_injection/bench_explanation.md": "3011489d07c417645d284d47e82659369901209b9f710e360194f3682561f96d",
+    "benchmark_docs/capability/baseline.json": "376d85ecf053a74bfe2230f24b03dbd98a0060c3e5f9ba21f85f3a96cc9080c0"
+  }
+}

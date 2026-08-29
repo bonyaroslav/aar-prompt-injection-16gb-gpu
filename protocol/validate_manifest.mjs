@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+const file = process.argv[2] ?? new URL('./manifest.json', import.meta.url);
+const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+const required = ['protocol_version','upstream','model','evaluation','training','resources','selection','analysis','allowed_technical_fallbacks','held_out_policy'];
+for (const key of required) if (data[key] === undefined || data[key] === null || data[key] === '') throw new Error(`missing:${key}`);
+if (data.upstream.commit !== '1899ad64fbfbc65790d259471cc4bf4de9437aa9') throw new Error('upstream commit is not pinned');
+if (data.model.revision !== data.model.tokenizer_revision) throw new Error('model/tokenizer revisions differ');
+for (const key of ['strategy','temperature','top_p','seed','batch_size','auto_ceiling','no_repeat_ngram']) if (data.evaluation.decoding[key] === undefined) throw new Error(`implicit decoding:${key}`);
+const allowed = new Set(['single_oom_sequence_length_2048_to_1536_then_full_restart','disable_optional_fused_kernels','pin_compatible_package_version']);
+for (const fallback of data.allowed_technical_fallbacks) if (!allowed.has(fallback)) throw new Error('unauthorized fallback');
+if (data.held_out_policy.runner_preselection !== 'deny_plaintext_outputs_metrics_and_aggregates') throw new Error('held-out preselection access is not denied');
+const digest = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+console.log(`valid manifest: ${file} sha256=${digest}`);
