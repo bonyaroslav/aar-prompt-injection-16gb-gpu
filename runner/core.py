@@ -46,6 +46,16 @@ class RunResult:
     checksums: dict
     metrics: dict
 
+def effective_eval_config(manifest: dict, checkpoint: str | None) -> dict:
+    """The evaluation configuration actually used for a run: the manifest's frozen
+    `evaluation` block (prompt/decoding/sample/scorer settings) plus which
+    model/checkpoint is loaded. Baseline uses `checkpoint=None`; trained-checkpoint
+    evaluation (`runner.evaluation.run_trained_evaluation`) passes the checkpoint's
+    fingerprint. The two calls' output must diff to nothing but this one field --
+    that equality is the evaluation stage's core contract.
+    """
+    return {**manifest["evaluation"], "checkpoint": checkpoint}
+
 def _run_benchmark(name: str, cfg: dict, *, model, dataset, scorer) -> tuple[dict, int]:
     sample_count = resolve_sample_count(cfg["sample_ids"])
     items = dataset.load_items(name, sample_count)
@@ -132,7 +142,7 @@ def run_baseline(manifest_path, *, model, dataset, scorer, telemetry, storage, h
             "model_revision": manifest["model"]["revision"],
         }, indent=2, sort_keys=True),
         "command.sh": f"#!/usr/bin/env bash\nset -euo pipefail\n{command}\n",
-        "config.yaml": json.dumps(eval_cfg, indent=2, sort_keys=True),
+        "config.yaml": json.dumps(effective_eval_config(manifest, None), indent=2, sort_keys=True),
         "environment.txt": "\n".join([
             f"python={platform.python_version()}",
             f"platform={platform.platform()}",
