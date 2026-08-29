@@ -22,6 +22,10 @@ class HeldOutSealer:
         s = self._read()
         if s["candidates"] is not None: raise RuntimeError("candidate commitment already frozen")
         s.update(candidates=self.digest(sorted(candidate_ids)), validity=self.digest(validity_rules)); self._write(s)
+    def commitments(self) -> dict:
+        """Public digests only (never plaintext candidate IDs or validity rules)."""
+        s = self._read()
+        return {"state": s["state"], "candidates": s["candidates"], "validity": s["validity"]}
     def store_receipt(self, label: str, payload: bytes, valid: int, invalid: int):
         if self._read()["state"] != "SEALED": raise RuntimeError("results may only be stored while sealed")
         path = self.root / f"{label}.blob"; path.write_bytes(payload)

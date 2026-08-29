@@ -27,7 +27,7 @@ class FakeScorerAdapter:
     """Deterministic pass/fail derived only from benchmark+item id, never randomness."""
     def score(self, benchmark: str, item: dict, output: str, config: dict) -> dict:
         digest = hashlib.sha256(f"{benchmark}:{item['id']}:{output}".encode()).hexdigest()
-        return {"score": int(digest[0], 16) % 2}
+        return {"score": int(digest[0], 16) % 2, "valid": int(digest[1], 16) % 4 != 0}
 
 class FakeTelemetryAdapter:
     def __init__(self):

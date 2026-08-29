@@ -1,13 +1,14 @@
-import tempfile, unittest
+import json, tempfile, unittest
 from pathlib import Path
 
-from runner.core import run_baseline, resolve_sample_count
+from runner.core import run_baseline, resolve_sample_count, read_held_out_result
 from runner.fakes import (
     FakeModelAdapter, FakeDatasetAdapter, FakeScorerAdapter,
     FakeTelemetryAdapter, PUBLISHER_OPI_DEFAULT,
 )
 from runner.storage import LocalStorageAdapter
 from runner.bundle import verify_bundle, BUNDLE_FILES, CHECKSUM_FILE
+from protocol.heldout import HeldOutSealer
 
 MANIFEST = Path(__file__).parents[1] / "protocol" / "manifest.json"
 
@@ -16,8 +17,13 @@ class RunnerBaselineTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.storage = LocalStorageAdapter(self.tmp.name)
+        # Held-out root is deliberately a separate temp dir from run-bundle storage,
+        # mirroring the requirement that it never live under runs/ or the bundle.
+        self.heldout_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.heldout_tmp.cleanup)
+        self.sealer = HeldOutSealer(self.heldout_tmp.name)
 
-    def _run(self, run_id="baseline-test-001"):
+    def _run(self, run_id="baseline-test-001", sealer=None):
         return run_baseline(
             MANIFEST,
             model=FakeModelAdapter(),
@@ -25,6 +31,7 @@ class RunnerBaselineTests(unittest.TestCase):
             scorer=FakeScorerAdapter(),
             telemetry=FakeTelemetryAdapter(),
             storage=self.storage,
+            held_out_sealer=sealer or self.sealer,
             run_id=run_id,
         )
 
@@ -80,6 +87,40 @@ class RunnerBaselineTests(unittest.TestCase):
         src = Path(fakes_mod.__file__).read_text()
         for banned in ("torch", "transformers", "requests", "huggingface_hub", "socket"):
             self.assertNotIn(banned, src)
+
+    def test_injecagent_result_never_appears_as_plaintext_in_bundle(self):
+        result = self._run()
+        held_out = result.metrics["held_out"]["injecagent"]
+        self.assertEqual(set(held_out.keys()), {"receipt", "commitments"})
+        self.assertEqual(set(held_out["receipt"].keys()), {"label", "digest", "valid", "invalid"})
+        self.assertEqual(held_out["receipt"]["label"], "baseline")
+        self.assertEqual(held_out["receipt"]["valid"] + held_out["receipt"]["invalid"], 200)
+        # commitments are digests, never the plaintext candidate list or validity text
+        self.assertEqual(set(held_out["commitments"].keys()), {"state", "candidates", "validity"})
+        for key in ("candidates", "validity"):
+            self.assertRegex(held_out["commitments"][key], r"^[0-9a-f]{64}$")
+
+        bundle_metrics = json.loads((Path(result.bundle_dir) / "metrics.json").read_text())
+        bundle_blob = json.dumps(bundle_metrics)
+        for candidate_id in (f"injecagent-{i:04d}" for i in range(200)):
+            self.assertNotIn(candidate_id, bundle_blob)
+        for path_name in BUNDLE_FILES:
+            text = (Path(result.bundle_dir) / path_name).read_text()
+            self.assertNotIn("fake-output:injecagent", text)
+
+    def test_held_out_cannot_be_read_through_runner_before_authorization(self):
+        # Mirrors tests/test_protocol.py::test_heldout_cannot_be_read_before_selection,
+        # but exercised through the runner's own seam rather than the sealer directly.
+        self._run()
+        with self.assertRaises(PermissionError):
+            read_held_out_result(self.sealer, {"finalized": False})
+        with self.assertRaises(PermissionError):
+            read_held_out_result(self.sealer, {"finalized": True, "checkpoint": "sha256:unfinalized-selection"})
+
+    def test_reusing_a_sealer_for_a_second_baseline_run_is_rejected(self):
+        self._run(run_id="baseline-a")
+        with self.assertRaisesRegex(RuntimeError, "already frozen"):
+            self._run(run_id="baseline-b")
 
 if __name__ == "__main__":
     unittest.main()
