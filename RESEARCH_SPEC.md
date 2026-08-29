@@ -78,7 +78,7 @@ The study is a constrained replication-plus-extension. It preserves the pinned u
 - Publish a modest report even when mitigation results are null, negative, capability-failing, or unstable, provided the evidence remains valid.
 - Use QLoRA with a frozen 4-bit NF4 base model, double quantization, BF16 compute, and adapter-only training. Permit plain LoRA only as a documented compatibility fallback when the pinned software stack cannot execute QLoRA correctly; model quality cannot trigger the fallback.
 - Use response-only supervised fine-tuning. Training examples pair trusted benign instructions and adversarial injected content with target responses that follow trusted instructions while ignoring untrusted instructions. Exclude DPO and custom losses from Attempt 1.
-- Build training data only from upstream-authorized training splits or newly generated examples produced without viewing evaluation content. Freeze source revisions, generation templates, and hashes. Remove exact and normalized near-duplicates against every visible evaluation set. Exclude InjecAgent from construction and deduplication.
+- Build training data only from upstream-authorized training splits or newly generated examples produced without viewing evaluation content. Freeze source revisions, generation templates, and hashes. Remove exact and normalized near-duplicates against every visible evaluation set. Exclude InjecAgent from construction and deduplication. **Resolved by [`docs/adr/0001-training-data-sources.md`](docs/adr/0001-training-data-sources.md):** public-dataset + template synthesis (no paid API, no gated datasets, no `HF_TOKEN` needed for Attempt 1) — attacks from `deepset/prompt-injections` + `Lakera/gandalf_ignore_instructions` plus deterministic templated variation, clean controls from `databricks/databricks-dolly-15k`, ambiguous/refusal categories built by fixed templates. `hackaprompt/hackaprompt-dataset` is excluded (gated, needs manual token grant); local-model generation is the documented fallback if the seed-1 pilot shows no movement, not an enrichment of the same route.
 - Target 5,000 training examples: 40% prompt-injection attacks, 30% clean instruction-following controls, 20% ambiguous trust-boundary cases, and 10% refusal or calibration cases. Cap Attempt 1 sequences at 2,048 tokens and report final category counts after filtering.
 - Configure adapters with rank 16, alpha 32, dropout 0.05, and no bias training. Target the attention `q`, `k`, `v`, and `o` projections plus the MLP `gate`, `up`, and `down` projections. Enable gradient checkpointing and disable the model cache during training.
 - Use AdamW with a learning rate of `2e-4`, cosine decay, 3% warmup, weight decay `0.01`, three epochs, micro-batch size 1, gradient accumulation 16, and gradient clipping at 1.0. If an OOM occurs, reduce sequence length once from 2,048 to 1,536 tokens and restart; do not tune quality-related parameters after viewing scores.
@@ -183,9 +183,9 @@ Model quality is reported separately. A null or negative result is still useful 
 
 ### Phase 5: Prepare data and train seed 1
 
-- Build 5,000 examples using the accepted 40/30/20/10 category mix.
+- Build 5,000 examples using the accepted 40/30/20/10 category mix, sourced per [`docs/adr/0001-training-data-sources.md`](docs/adr/0001-training-data-sources.md) (public datasets + deterministic templates; no paid API; no gated dataset; no `HF_TOKEN` required).
 - Record source, generation rule, category, and hash for every example.
-- Remove exact and normalized near-duplicates against visible evaluation data.
+- Remove exact and normalized near-duplicates against visible evaluation data, including unselected rows from the same upstream pools (e.g. Tensor Trust rows outside the published 300-item subset) — see the ADR's exclusion rule.
 - Keep InjecAgent completely outside data creation and checking.
 - Train QLoRA seed `17` using the frozen settings and save a checkpoint after each epoch.
 

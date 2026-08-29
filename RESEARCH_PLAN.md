@@ -160,6 +160,7 @@ Do not copy the upstream source tree into this repository. Pin it and keep our c
 | Preserve held-out isolation | Prevents checkpoint selection from overfitting InjecAgent |
 | Publish negative findings | Feasibility boundaries and failed transfer are useful results |
 | Put Attempt 2 in another repository | Prevents axes, decisions, and artifacts from becoming mixed |
+| Build training data via public-dataset + template synthesis, not paid API or local-model generation ([ADR 0001](docs/adr/0001-training-data-sources.md)) | Keeps Attempt 1 fully auditable and unattended (no `HF_TOKEN`, no gated datasets, no paid API); local-model generation is the documented fallback if the seed-1 pilot shows no movement |
 
 If one of these decisions changes, add a short ADR explaining what changed and why; do not silently rewrite history.
 
