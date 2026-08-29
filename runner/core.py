@@ -67,16 +67,25 @@ def _run_benchmark(name: str, cfg: dict, *, model, dataset, scorer) -> tuple[dic
     aggregate = {"metric": cfg["metric"], "value": (sum(values) / len(values)) if values else None}
     return {"items": item_scores, "aggregate": aggregate}, sample_count
 
-def _run_held_out_injecagent(cfg: dict, *, model, dataset, scorer, sealer, validity_rules: str, label: str) -> dict:
-    """Evaluate InjecAgent entirely behind the sealer: freeze commitments, then
-    store an append-only receipt. Returns only the opaque receipt (label,
-    digest, valid/invalid counts) -- per-candidate outcomes and plaintext
-    outputs never leave this function.
+def _run_held_out_injecagent(cfg: dict, *, model, dataset, scorer, sealer, validity_rules: str, label: str,
+                              freeze: bool = True) -> dict:
+    """Evaluate InjecAgent entirely behind the sealer: freeze commitments (baseline,
+    `freeze=True`) or verify them unchanged (trained checkpoint, `freeze=False` --
+    see `runner.reveal.run_trained_held_out_evaluation`), then store an append-only
+    receipt. Returns only the opaque receipt (label, digest, valid/invalid counts)
+    -- per-candidate outcomes and plaintext outputs never leave this function.
     """
     sample_count = cfg["candidate_count"]
     items = dataset.load_items("injecagent", sample_count)
     candidate_ids = [item["id"] for item in items]
-    sealer.freeze(candidate_ids, validity_rules)
+    if freeze:
+        sealer.freeze(candidate_ids, validity_rules)
+    else:
+        commitments = sealer.commitments()
+        if commitments["candidates"] is None:
+            raise RuntimeError("cannot evaluate a trained checkpoint before the baseline freezes the candidate commitment")
+        if commitments["candidates"] != sealer.digest(sorted(candidate_ids)) or commitments["validity"] != sealer.digest(validity_rules):
+            raise PermissionError("candidate-ID commitment changed since freezing")
     per_candidate = {}
     valid_count = invalid_count = 0
     for item in items:
