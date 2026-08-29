@@ -1,6 +1,6 @@
 # Prompt-Injection Research Plan for a Single 16 GB GPU
 
-**Status:** accepted initial plan  
+**Status:** accepted initial plan; Phase 1 issue #2 (runner core: manifest -> baseline stage -> checksummed bundle, fake adapters) closed 2026-08-29. Next open, unblocked issue: #3 (held-out sealing wired into the runner). `RESEARCH_SPEC.md` (detailed Implementation/Testing Decisions) was removed from the working tree on 2026-08-29 at the maintainer's request; the frozen protocol values it described live on in `protocol/manifest.json`, and its prior text is still recoverable via `git show 2f8359d:RESEARCH_SPEC.md`.
 **Date:** 2026-08-29  
 **Repository:** `aar-prompt-injection-16gb-gpu`
 
