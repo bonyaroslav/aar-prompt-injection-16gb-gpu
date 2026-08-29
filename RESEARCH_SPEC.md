@@ -1,8 +1,11 @@
+# Research Spec and Execution Plan
+
+> **Purpose:** Run and publish an auditable prompt-injection post-training experiment using one RTX 4080-class GPU with 16 GB VRAM.
+> **Companion:** [`RESEARCH_PLAN.md`](RESEARCH_PLAN.md) records the original high-level plan and source context (upstream paper, upstream repository, local checkout path). This document is the accepted, detailed spec plus the phase-by-phase execution plan; both are public artifacts meant to accompany the eventual results write-up.
+
 ## Problem Statement
 
-A solo researcher needs to determine whether a complete, auditable prompt-injection post-training experiment can be run and published on one RTX 4080-class GPU with 16 GB of VRAM. The current repository contains a research plan but no executable workflow, frozen protocol manifest, provenance locks, evaluation implementation, resource accounting, held-out isolation, or immutable run artifacts.
-
-The study currently risks conflating four different outcomes: hardware feasibility, mitigation effectiveness on visible safety benchmarks, transfer to held-out InjecAgent, and stability across training seeds. It also lacks operational definitions for feasibility and held-out blindness. Without a single experiment interface and an explicit evidence contract, implementation details could drift between baseline and trained runs, benchmark leakage could go unnoticed, and post-result choices could weaken the credibility of the report.
+A solo researcher needs to determine whether a complete, auditable prompt-injection post-training experiment can be run and published on one RTX 4080-class GPU with 16 GB of VRAM. The study must avoid conflating four different outcomes: hardware feasibility, mitigation effectiveness on visible safety benchmarks, transfer to held-out InjecAgent, and stability across training seeds. It also needs explicit operational definitions for feasibility and held-out blindness, so that implementation details cannot drift between baseline and trained runs, benchmark leakage goes unnoticed, or post-result choices weaken the credibility of the report.
 
 ## Solution
 
@@ -104,7 +107,7 @@ The study is a constrained replication-plus-extension. It preserves the pinned u
 - Verify that poor seed-one quality does not suppress seeds two and three when the technical and resource continuation conditions pass.
 - Verify that projected resource-budget failure prevents additional seeds without rewriting or deleting the seed-one evidence.
 - Verify that secrets, credentials, caches, and raw held-out material are excluded from publishable bundles and repository-bound artifacts.
-- No prior test implementation exists in the repository; the experiment-runner contract tests become the prior art for subsequent modules.
+- The protocol-manifest contract tests (`tests/test_protocol.py`) are the prior art for subsequent modules; the experiment runner adds contract tests at its own seam rather than duplicating them elsewhere.
 
 ## Out of Scope
 
@@ -118,10 +121,128 @@ The study is a constrained replication-plus-extension. It preserves the pinned u
 - Treating a capability-failing checkpoint as a mitigation success.
 - Attempt 2, which must live in a separate repository.
 
-## Further Notes
+## Execution Plan
 
-- The repository currently contains only the research plan. All executable modules, manifests, provenance locks, tests, run artifacts, analysis, and publication material remain to be implemented.
-- The pinned upstream commit is the source of truth for behavior that the local protocol has not yet resolved, but implicit upstream values must be exported into the frozen manifest before baseline execution.
-- Questions Q1 through Q19 are accepted and represented as implementation decisions in this specification.
-- All protocol values must be frozen before baseline execution and must not be selected or changed after viewing baseline or trained quality results, except through the explicitly declared technical-fallback rules.
-- The accepted test seam is intentionally deep: deleting the experiment-runner module would force orchestration, validation, isolation, evidence production, and failure semantics to reappear across multiple callers.
+### What success means
+
+The main question is simple: **Can one person complete this entire experiment on one 16 GB GPU?**
+
+The experiment is technically feasible only when the final prescribed run:
+
+- finishes without an out-of-memory error;
+- uses no more than 15.5 GB of allocated GPU memory;
+- takes no more than 24 hours per training run;
+- stays within 72 total GPU-hours and 250 GB of storage; and
+- needs no manual help after each stage starts.
+
+Model quality is reported separately. A null or negative result is still useful when the experiment is complete and the evidence is trustworthy.
+
+### Phase 1: Freeze the rules — **done**
+
+- Record the exact upstream code commit, model and tokenizer revisions, dataset versions, sample IDs, prompts, decoding settings, scorers, seeds, training settings, resource limits, selection rule, and analysis method in one protocol manifest. See [`protocol/manifest.json`](protocol/manifest.json), checksummed by [`protocol/manifest.sha256`](protocol/manifest.sha256).
+- Record every deliberate difference from the upstream project. See [`protocol/deviations.md`](protocol/deviations.md).
+- Define how held-out InjecAgent results will remain sealed until checkpoint selection is final. See [`protocol/heldout_sealing.md`](protocol/heldout_sealing.md) and [`protocol/heldout.py`](protocol/heldout.py).
+- Confirm that raw held-out data, credentials, and restricted files cannot enter publishable artifacts.
+
+**Complete when:** a reviewer can identify exactly what will run without asking for an unstated value. The manifest is frozen before generating baseline quality results.
+
+**Publication value:** Supports *"What does a trustworthy consumer-GPU experiment require?"*
+
+### Phase 2: Build and test the experiment workflow — not started
+
+- Build one experiment runner that accepts the frozen manifest.
+- Make it run baseline evaluation, training, checkpoint evaluation, selection, held-out sealing and reveal, resource monitoring, and evidence packaging.
+- Make each run produce an immutable, checksummed bundle.
+- Test the complete workflow with small, deterministic fake inputs before using the real model or GPU.
+
+**Complete when:** the small end-to-end test passes, failure cases are preserved, and the runner can complete a short real-GPU smoke test.
+
+**Publication value:** Supports *"How can one person keep an AI experiment reproducible?"*
+
+### Phase 3: Run small smoke tests
+
+- Load the pinned model in 4-bit mode.
+- Run a tiny sample from every visible benchmark and capability test.
+- Train briefly on a tiny data sample.
+- Confirm that GPU memory, runtime, disk use, logs, and checksums are captured.
+- Test the approved fallbacks without looking at full benchmark quality.
+
+**Complete when:** every stage works on a small sample and projected full-run resource use fits the declared limits. If it does not fit, stop and publish the feasibility failure rather than quietly changing the study.
+
+**Publication value:** Supports *"What usually breaks before consumer-GPU training starts?"*
+
+### Phase 4: Run and seal the baseline
+
+- Evaluate the untrained model on OPI, Tensor Trust hijacking, Tensor Trust extraction, MMLU, GSM8K, and IFEval.
+- Run baseline InjecAgent evaluation through the sealing process without viewing its results.
+- Use the same prompts, decoding, sample IDs, and scorers that will be used for trained checkpoints.
+
+**Complete when:** all baseline artifacts pass checksum and completeness checks. Any protocol change after this point creates a new protocol version and requires a new baseline.
+
+**Publication value:** Provides the "before" evidence for every result article.
+
+### Phase 5: Prepare data and train seed 1
+
+- Build 5,000 examples using the accepted 40/30/20/10 category mix.
+- Record source, generation rule, category, and hash for every example.
+- Remove exact and normalized near-duplicates against visible evaluation data.
+- Keep InjecAgent completely outside data creation and checking.
+- Train QLoRA seed `17` using the frozen settings and save a checkpoint after each epoch.
+
+**Complete when:** seed 1 finishes all three epochs, or an unrecoverable technical failure is fully recorded. One OOM permits only the declared reduction from 2,048 to 1,536 tokens and a full restart.
+
+**Publication value:** Supports *"Can safety training fit on one gaming GPU, and what does it cost?"*
+
+### Phase 6: Evaluate and select the checkpoint
+
+- Evaluate every epoch checkpoint on the three visible safety benchmarks and all three capability tests.
+- Calculate each safety improvement over baseline; average the three without weighting them.
+- Reject checkpoints that exceed any capability-loss limit.
+- Select the eligible checkpoint with the highest safety average. Break ties by lower capability loss, then earlier epoch.
+- Keep held-out InjecAgent sealed.
+
+**Complete when:** the selection record is finalized and checksummed. A meaningful visible improvement requires at least five percentage points while passing every capability gate.
+
+**Publication value:** Supports *"Did training make the model harder to trick?"* and *"Did safety training make it less useful?"*
+
+### Phase 7: Reveal held-out results and test repeatability
+
+- After selection is final, reveal baseline and selected-checkpoint InjecAgent results together.
+- Report valid-only results and results where technical failures count as failures.
+- Classify invalid or failed agent turns using the frozen rules.
+- Run seeds `42` and `2026` when seed 1 was technically sound and projected total use remains within the 72 GPU-hour budget.
+- Evaluate later seeds using the same frozen protocol.
+
+**Complete when:** held-out results are reported once without post-reveal tuning. Later seeds are completed or omitted only because the frozen technical or resource rule failed — not because seed 1 performed poorly.
+
+**Publication value:** Supports *"Did improvement work on attacks the training never saw?"* and *"Would another run produce a similar result?"*
+
+### Phase 8: Analyze and publish
+
+- Separate conclusions about feasibility, visible safety improvement, capability preservation, held-out transfer, and repeatability.
+- Report failures and null results with the same care as positive results.
+- Publish a short main report and the evidence-led article series below.
+- Make publishable manifests, code, summaries, and checksums easy to find.
+
+**Complete when:** every public claim points to concrete evidence, every limitation is visible, and another practitioner can estimate whether they can repeat the work.
+
+## Planned Article Series
+
+Each article uses: **question → why it matters → what we did → what we observed → evidence → meaning → what it does not prove → practical advice**.
+
+1. **Can you do serious AI safety research with one gaming GPU?** Evidence: completion status, memory, time, storage, failures, and intervention.
+2. **What does this kind of experiment really cost?** Evidence: GPU-hours, wall time, disk use, setup effort, failed attempts, and repeat-run cost.
+3. **Did the extra training make the model harder to trick?** Evidence: before-and-after safety scores, uncertainty, and representative behavior changes.
+4. **Did making the model safer also make it less useful?** Evidence: knowledge, mathematics, and instruction-following changes; rejected checkpoints.
+5. **Did the improvement work on attacks the training never saw?** Evidence: sealed held-out comparison, validity counts, and failure categories.
+6. **Would we get a similar result if we ran the training again?** Evidence: three seed results, spread, resource variation, and nondeterminism.
+7. **What failed, and what can the next researcher learn from it?** Evidence: OOMs, software failures, wasted work, useful fallbacks, and a replication checklist.
+8. **Is this experiment worth repeating or extending?** Evidence: supported conclusions, remaining uncertainty, and the smallest useful follow-up study.
+
+## Status and Guardrails
+
+- Repository role: this repo holds the protocol, wrappers, evidence, and analysis meant to be published alongside the results write-up. The upstream paper's code lives in a separate local checkout at `C:\Projects\automated_alignment_researcher` and is not vendored here — only its pinned commit and file hashes are recorded, in [`protocol/provenance.json`](protocol/provenance.json).
+- Phase 1 is complete: manifest frozen, provenance fingerprinted, deviations disclosed, held-out sealing implemented and tested.
+- Phase 2 (the experiment-runner module) has not been started.
+- Treat this document as authoritative. Freeze protocol values before the baseline; do not inspect InjecAgent content or results during data creation, tuning, or checkpoint selection; do not change quality-related settings after viewing results.
+- WSL2 Ubuntu with CUDA is configured and working (`wsl -d Ubuntu`, GPU visible as an RTX 4080 with 16376 MiB). Python in that environment is 3.14.4; no `torch` installed yet, and no `nvcc`. Confirm PyTorch/bitsandbytes wheel availability for Python 3.14 before Phase 3.
