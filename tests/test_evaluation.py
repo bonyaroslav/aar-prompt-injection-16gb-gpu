@@ -85,5 +85,60 @@ class TrainedCheckpointEvaluationTests(unittest.TestCase):
             self._run(run_id="eval-dup")
 
 
+class _OverridingTelemetryAdapter(FakeTelemetryAdapter):
+    """Mimics a real adapter that overrides the evidence-bundle captions -- e.g.
+    `RealTelemetryAdapter` setting `.command_text`/`.notes_text` after construction
+    (see `runner.real_seed_run.run_real_seed`)."""
+
+    def __init__(self):
+        super().__init__()
+        self.command_text = "the real reproduction command"
+        self.notes_text = lambda stage: f"real notes for {stage}"
+
+    def environment_text(self) -> str:
+        return "real environment facts\n"
+
+
+class _ManifestMetadataGuardDatasetAdapter(FakeDatasetAdapter):
+    """A dataset adapter that would blow up if the eval stage ever touched its
+    InjecAgent-provenance surface -- exactly the property `RealDatasetAdapter`
+    exposes that reads `heldout_dir`, which this stage must never do."""
+
+    @property
+    def manifest_metadata(self):
+        raise AssertionError("trained-checkpoint evaluation must never call dataset.manifest_metadata()")
+
+    @property
+    def environment_lines(self):
+        raise AssertionError("trained-checkpoint evaluation must never touch dataset.environment_lines")
+
+
+class AdapterOverrideTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = LocalStorageAdapter(self.tmp.name)
+
+    def test_real_style_telemetry_overrides_command_environment_and_notes(self):
+        result = run_trained_evaluation(
+            MANIFEST, model=FakeModelAdapter(), dataset=FakeDatasetAdapter(),
+            scorer=FakeScorerAdapter(), telemetry=_OverridingTelemetryAdapter(),
+            storage=self.storage, seed=17, epoch=1, checkpoint=CHECKPOINT, run_id="eval-override",
+        )
+        bundle_dir = Path(result.bundle_dir)
+        self.assertIn("the real reproduction command", (bundle_dir / "command.sh").read_text())
+        self.assertEqual((bundle_dir / "environment.txt").read_text(), "real environment facts\n")
+        self.assertEqual((bundle_dir / "notes.md").read_text(), "real notes for trained_evaluation")
+
+    def test_never_touches_dataset_manifest_metadata_or_environment_lines(self):
+        # Must not raise: proves the eval stage never accesses either guarded property.
+        result = run_trained_evaluation(
+            MANIFEST, model=FakeModelAdapter(), dataset=_ManifestMetadataGuardDatasetAdapter(),
+            scorer=FakeScorerAdapter(), telemetry=FakeTelemetryAdapter(),
+            storage=self.storage, seed=17, epoch=1, checkpoint=CHECKPOINT, run_id="eval-guarded",
+        )
+        self.assertEqual(result.stage, "trained_evaluation")
+
+
 if __name__ == "__main__":
     unittest.main()

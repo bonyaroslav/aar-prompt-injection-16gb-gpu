@@ -19,7 +19,10 @@ import dataclasses, json, platform, sys, time
 
 from protocol.validate_manifest import load as load_manifest
 from runner.bundle import write_bundle, finalize_bundle
-from runner.core import VISIBLE_SAFETY_BENCHMARKS, CAPABILITY_BENCHMARKS, _run_benchmark, effective_eval_config
+from runner.core import (
+    VISIBLE_SAFETY_BENCHMARKS, CAPABILITY_BENCHMARKS, _run_benchmark, effective_eval_config,
+    _adapter_command, _adapter_environment, _adapter_events, _adapter_metadata, _adapter_notes,
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -65,33 +68,48 @@ def run_trained_evaluation(manifest_path, *, model, dataset, scorer, telemetry, 
         log_lines.append(f"scored {name}: n={n}")
 
     telemetry_rows = telemetry.stop()
+    # `dataset` is deliberately excluded from every adapter-notification helper below:
+    # `RealDatasetAdapter.manifest_metadata`/`environment_lines` exist only to surface the
+    # InjecAgent source commit for held-out-touching stages, and evaluating that property
+    # would read `heldout_dir` -- exactly what this stage must never do (see module docstring).
+    log_lines.extend(_adapter_events(model, scorer, telemetry))
     log_lines.append(f"finished trained-checkpoint evaluation run {run_id}")
 
     command = (
         f"{sys.executable} -m runner.evaluation --manifest {manifest_path} --run-id {run_id} "
         f"--seed {seed} --epoch {epoch} --checkpoint-dir {checkpoint['merged_dir']}"
     )
+    manifest_record = {
+        "run_id": run_id, "stage": "trained_evaluation",
+        "protocol_version": manifest["protocol_version"],
+        "upstream_commit": manifest["upstream"]["commit"],
+        "model_revision": manifest["model"]["revision"],
+        "seed": seed, "epoch": epoch, "checkpoint": checkpoint_fingerprint,
+    }
+    manifest_record.update(_adapter_metadata(model, scorer, telemetry))
     contents = {
-        "manifest.yaml": json.dumps({
-            "run_id": run_id, "stage": "trained_evaluation",
-            "protocol_version": manifest["protocol_version"],
-            "upstream_commit": manifest["upstream"]["commit"],
-            "model_revision": manifest["model"]["revision"],
-            "seed": seed, "epoch": epoch, "checkpoint": checkpoint_fingerprint,
-        }, indent=2, sort_keys=True),
-        "command.sh": f"#!/usr/bin/env bash\nset -euo pipefail\n{command}\n",
+        "manifest.yaml": json.dumps(manifest_record, indent=2, sort_keys=True),
+        "command.sh": (
+            "#!/usr/bin/env bash\nset -euo pipefail\n"
+            f"{_adapter_command(command, model, scorer, telemetry)}\n"
+        ),
         "config.yaml": json.dumps(effective_eval_config(manifest, checkpoint_fingerprint), indent=2, sort_keys=True),
-        "environment.txt": "\n".join([
+        "environment.txt": _adapter_environment(telemetry, "\n".join([
             f"python={platform.python_version()}",
             f"platform={platform.platform()}",
             "gpu=none (fake adapters; no real GPU or model weights used)",
-        ]) + "\n",
+        ]) + "\n", model, scorer),
         "metrics.json": json.dumps(metrics, indent=2, sort_keys=True),
         "execution.log": "\n".join(log_lines) + "\n",
         "gpu.csv": "t,vram_mb,util_pct\n" + "\n".join(
             f"{row['t']},{row['vram_mb']},{row['util_pct']}" for row in telemetry_rows
         ) + "\n",
-        "notes.md": "# Trained-checkpoint evaluation run notes\n\nFake adapters only: no GPU, no model weights. Held-out InjecAgent is not evaluated in this stage.\n",
+        "notes.md": _adapter_notes(
+            "trained_evaluation",
+            "# Trained-checkpoint evaluation run notes\n\nFake adapters only: no GPU, no model weights. "
+            "Held-out InjecAgent is not evaluated in this stage.\n",
+            model, scorer, telemetry,
+        ),
     }
     write_bundle(bundle_dir, contents)
     checksums = finalize_bundle(bundle_dir)
