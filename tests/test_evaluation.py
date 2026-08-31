@@ -2,8 +2,9 @@ import json, tempfile, unittest
 from pathlib import Path
 
 from runner.core import effective_eval_config
-from runner.evaluation import run_trained_evaluation
+from runner.evaluation import EvaluationRecovery, run_trained_evaluation
 from runner.fakes import FakeModelAdapter, FakeDatasetAdapter, FakeScorerAdapter, FakeTelemetryAdapter
+from runner.recovery import AttemptLedger, RecoveryWorkspace
 from runner.storage import LocalStorageAdapter
 from runner.bundle import verify_bundle, BUNDLE_FILES, CHECKSUM_FILE
 from protocol.validate_manifest import load as load_manifest
@@ -138,6 +139,200 @@ class AdapterOverrideTests(unittest.TestCase):
             storage=self.storage, seed=17, epoch=1, checkpoint=CHECKPOINT, run_id="eval-guarded",
         )
         self.assertEqual(result.stage, "trained_evaluation")
+
+
+class _InterruptingModelAdapter:
+    """Wraps `FakeModelAdapter`, raising after `fail_after` generations to inject
+    an interruption mid-evaluation."""
+
+    def __init__(self, fail_after):
+        self._inner = FakeModelAdapter()
+        self.fail_after = fail_after
+        self.generated = []
+
+    def generate(self, benchmark, item, config):
+        if len(self.generated) >= self.fail_after:
+            raise RuntimeError("injected interruption")
+        self.generated.append((benchmark, item["id"]))
+        return self._inner.generate(benchmark, item, config)
+
+
+class _CountingScorerAdapter(FakeScorerAdapter):
+    def __init__(self):
+        self.scored = []
+
+    def score(self, benchmark, item, output, config):
+        self.scored.append((benchmark, item["id"]))
+        return super().score(benchmark, item, output, config)
+
+
+class _CountingModelAdapter(FakeModelAdapter):
+    def __init__(self):
+        self.generated = []
+
+    def generate(self, benchmark, item, config):
+        self.generated.append((benchmark, item["id"]))
+        return super().generate(benchmark, item, config)
+
+
+EXPECTED_EXAMPLE_COUNT = 300 * 4 + 200 * 2  # OPI/TT-hijack/TT-extract/MMLU + GSM8K/IFEval
+
+
+class ResumableEvaluationTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.storage = LocalStorageAdapter(root / "runs")
+        self.recovery_root = root / "recovery"
+        self.evidence_root = root / "runs"
+
+    def _workspace(self):
+        return RecoveryWorkspace(self.recovery_root, self.evidence_root)
+
+    def _run(self, *, run_id, recovery=None, model=None, scorer=None, dataset=None):
+        return run_trained_evaluation(
+            MANIFEST,
+            model=model or FakeModelAdapter(),
+            dataset=dataset or FakeDatasetAdapter(),
+            scorer=scorer or FakeScorerAdapter(),
+            telemetry=FakeTelemetryAdapter(),
+            storage=self.storage,
+            seed=17,
+            epoch=1,
+            checkpoint=CHECKPOINT,
+            run_id=run_id,
+            recovery=recovery,
+        )
+
+    def test_uninterrupted_recovery_run_matches_a_plain_run_exactly(self):
+        plain = self._run(run_id="plain")
+        recovered = self._run(
+            run_id="recovered",
+            recovery=EvaluationRecovery(self._workspace(), "eval-seed17-epoch1"),
+        )
+
+        self.assertEqual(recovered.metrics, plain.metrics)
+        self.assertEqual(
+            (Path(recovered.bundle_dir) / "metrics.json").read_text(),
+            (Path(plain.bundle_dir) / "metrics.json").read_text(),
+        )
+        self.assertEqual(
+            (Path(recovered.bundle_dir) / "config.yaml").read_text(),
+            (Path(plain.bundle_dir) / "config.yaml").read_text(),
+        )
+        verify_bundle(Path(recovered.bundle_dir))
+
+    def test_interrupted_then_resumed_matches_uninterrupted_and_scores_no_item_twice(self):
+        reference = self._run(run_id="reference")
+
+        workspace = self._workspace()
+        recovery = EvaluationRecovery(workspace, "eval-seed17-epoch1")
+        interrupting_model = _InterruptingModelAdapter(fail_after=400)
+        with self.assertRaises(RuntimeError):
+            self._run(run_id="attempt-1", recovery=recovery, model=interrupting_model)
+
+        resume_scorer = _CountingScorerAdapter()
+        resumed = self._run(
+            run_id="attempt-2", recovery=recovery, scorer=resume_scorer,
+        )
+
+        # nothing the first attempt already scored is scored again
+        first_attempt_scored = set(interrupting_model.generated)
+        self.assertEqual(len(first_attempt_scored), 400)
+        self.assertTrue(first_attempt_scored.isdisjoint(resume_scorer.scored))
+        self.assertEqual(len(resume_scorer.scored), len(set(resume_scorer.scored)))
+        self.assertEqual(
+            len(first_attempt_scored) + len(resume_scorer.scored), EXPECTED_EXAMPLE_COUNT
+        )
+
+        # identical final metrics and finalized-artifact topology
+        self.assertEqual(resumed.metrics, reference.metrics)
+        self.assertEqual(
+            (Path(resumed.bundle_dir) / "metrics.json").read_text(),
+            (Path(reference.bundle_dir) / "metrics.json").read_text(),
+        )
+        self.assertEqual(
+            {p.name for p in Path(resumed.bundle_dir).iterdir()},
+            set(BUNDLE_FILES) | {CHECKSUM_FILE},
+        )
+        verify_bundle(Path(resumed.bundle_dir))
+
+    def test_final_aggregation_counts_every_expected_example_exactly_once(self):
+        resumed = self._run(
+            run_id="agg",
+            recovery=EvaluationRecovery(self._workspace(), "eval-seed17-epoch1"),
+        )
+        total = sum(
+            len(benchmark["items"]) for benchmark in resumed.metrics["benchmarks"].values()
+        )
+        self.assertEqual(total, EXPECTED_EXAMPLE_COUNT)
+
+    def test_no_model_generation_is_interrupted_to_write_progress(self):
+        workspace = self._workspace()
+        recovery = EvaluationRecovery(workspace, "eval-seed17-epoch1")
+        model = _InterruptingModelAdapter(fail_after=5)
+        with self.assertRaises(RuntimeError):
+            self._run(run_id="attempt-1", recovery=recovery, model=model)
+
+        # exactly the 5 fully-generated items are journalled; the 6th (which raised
+        # before returning an output) is not
+        journalled = workspace.completed_progress("eval-seed17-epoch1")
+        self.assertEqual(len(journalled), 5)
+        self.assertEqual(set(journalled), set(model.generated))
+
+    def test_completed_stage_short_circuits_without_rescoring(self):
+        workspace = self._workspace()
+        recovery = EvaluationRecovery(workspace, "eval-seed17-epoch1")
+        first = self._run(run_id="first", recovery=recovery)
+
+        replay_model = _CountingModelAdapter()
+        replay_scorer = _CountingScorerAdapter()
+        again = run_trained_evaluation(
+            MANIFEST, model=replay_model, dataset=FakeDatasetAdapter(),
+            scorer=replay_scorer, telemetry=FakeTelemetryAdapter(), storage=self.storage,
+            seed=17, epoch=1, checkpoint=CHECKPOINT, run_id="second", recovery=recovery,
+        )
+
+        self.assertEqual(replay_model.generated, [])
+        self.assertEqual(replay_scorer.scored, [])
+        self.assertEqual(again.metrics, first.metrics)
+        self.assertEqual(again.bundle_dir, first.bundle_dir)
+        verify_bundle(Path(again.bundle_dir))
+
+    def test_resume_rejects_an_incompatible_signature_and_preserves_state(self):
+        workspace = self._workspace()
+        recovery = EvaluationRecovery(workspace, "eval-seed17-epoch1")
+        interrupting_model = _InterruptingModelAdapter(fail_after=10)
+        with self.assertRaises(RuntimeError):
+            self._run(run_id="attempt-1", recovery=recovery, model=interrupting_model)
+
+        with self.assertRaisesRegex(ValueError, "checkpoint_digest"):
+            run_trained_evaluation(
+                MANIFEST, model=FakeModelAdapter(), dataset=FakeDatasetAdapter(),
+                scorer=FakeScorerAdapter(), telemetry=FakeTelemetryAdapter(), storage=self.storage,
+                seed=17, epoch=1,
+                checkpoint={**CHECKPOINT, "fingerprint": "sha256:a-different-checkpoint"},
+                run_id="attempt-2", recovery=recovery,
+            )
+
+        # the interrupted partial state is still there for diagnosis / a correct resume
+        self.assertEqual(len(workspace.completed_progress("eval-seed17-epoch1")), 10)
+
+    def test_each_attempt_is_recorded_in_the_attempt_ledger(self):
+        workspace = self._workspace()
+        recovery = EvaluationRecovery(workspace, "eval-seed17-epoch1")
+        with self.assertRaises(RuntimeError):
+            self._run(
+                run_id="attempt-1", recovery=recovery,
+                model=_InterruptingModelAdapter(fail_after=50),
+            )
+        self._run(run_id="attempt-2", recovery=recovery)
+
+        rows = AttemptLedger(self.recovery_root / "attempts.jsonl").rows()
+        self.assertEqual([row["status"] for row in rows], ["interrupted", "completed"])
+        self.assertTrue(all(row["gpu_hours"] == "unavailable" for row in rows))
+        self.assertEqual(len({row["attempt_id"] for row in rows}), 2)
 
 
 if __name__ == "__main__":

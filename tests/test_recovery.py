@@ -399,6 +399,68 @@ class FinalizedInputTests(unittest.TestCase):
         )
 
 
+class RecoveryProgressJournalTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary_directory.cleanup)
+        temporary_root = Path(self.temporary_directory.name)
+        self.recovery_root = temporary_root / "recovery"
+        self.evidence_root = temporary_root / "evidence"
+        self.workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
+
+    def test_records_and_reloads_completed_example_outcomes_in_order(self):
+        self.workspace.record_progress(
+            "eval-1", benchmark="mmlu", example_id="mmlu-0000", outcome={"score": 1}
+        )
+        self.workspace.record_progress(
+            "eval-1", benchmark="mmlu", example_id="mmlu-0001", outcome={"score": 0}
+        )
+        self.workspace.record_progress(
+            "eval-1", benchmark="gsm8k", example_id="gsm8k-0000", outcome={"score": 1}
+        )
+
+        self.assertEqual(
+            self.workspace.completed_progress("eval-1"),
+            {
+                ("mmlu", "mmlu-0000"): {"score": 1},
+                ("mmlu", "mmlu-0001"): {"score": 0},
+                ("gsm8k", "gsm8k-0000"): {"score": 1},
+            },
+        )
+
+    def test_unwritten_journal_reads_as_empty(self):
+        self.assertEqual(self.workspace.completed_progress("eval-1"), {})
+
+    def test_tolerates_a_torn_trailing_append_from_a_hard_interruption(self):
+        self.workspace.record_progress(
+            "eval-1", benchmark="mmlu", example_id="mmlu-0000", outcome={"score": 1}
+        )
+        journal = self.recovery_root / "eval-1.progress.jsonl"
+        with journal.open("a", encoding="utf-8") as handle:
+            handle.write('{"benchmark": "mmlu", "example_id": "mmlu-0001"')  # no newline, no close
+
+        self.assertEqual(
+            self.workspace.completed_progress("eval-1"),
+            {("mmlu", "mmlu-0000"): {"score": 1}},
+        )
+
+    def test_a_corrupt_interior_line_is_not_silently_dropped(self):
+        self.workspace.record_progress(
+            "eval-1", benchmark="mmlu", example_id="mmlu-0000", outcome={"score": 1}
+        )
+        journal = self.recovery_root / "eval-1.progress.jsonl"
+        journal.write_text("not json\n" + journal.read_text(encoding="utf-8"), encoding="utf-8")
+
+        with self.assertRaises(json.JSONDecodeError):
+            self.workspace.completed_progress("eval-1")
+
+    def test_progress_journal_rejects_a_traversal_attempt_id(self):
+        with self.assertRaisesRegex(ValueError, "attempt ID"):
+            self.workspace.record_progress(
+                "../escape", benchmark="mmlu", example_id="mmlu-0000", outcome={"score": 1}
+            )
+
+
 class StageInspectionStatusTests(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()

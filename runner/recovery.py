@@ -197,6 +197,63 @@ class RecoveryWorkspace:
     def _read_state(self, attempt_id: str) -> dict:
         return json.loads(self._state_path(attempt_id).read_text(encoding="utf-8"))
 
+    def has_state(self, attempt_id: str) -> bool:
+        return self._state_path(attempt_id).exists()
+
+    def _progress_path(self, attempt_id: str) -> Path:
+        state_path = self._state_path(attempt_id)
+        return state_path.with_name(f"{state_path.stem}.progress.jsonl")
+
+    def record_progress(
+        self, attempt_id: str, *, benchmark: str, example_id: str, outcome: dict
+    ) -> None:
+        """Append one completed example to the attempt's progress journal.
+
+        Called only after a full generate+score for `example_id` has returned, so
+        no active model generation is ever interrupted to meet a write interval.
+        The append is flushed and fsync'd so an interruption after this call
+        leaves the example durably recorded.
+        """
+        path = self._progress_path(attempt_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(
+            {"benchmark": benchmark, "example_id": example_id, "outcome": outcome},
+            sort_keys=True,
+        )
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def completed_progress(self, attempt_id: str) -> dict:
+        """Every example already scored for this attempt, keyed by
+        ``(benchmark, example_id)``. A single unterminated trailing line -- a
+        torn append from a hard interruption -- is tolerated; any earlier
+        malformed line is a real corruption and is raised.
+        """
+        path = self._progress_path(attempt_id)
+        if not path.exists():
+            return {}
+        lines = path.read_text(encoding="utf-8").splitlines()
+        completed: dict = {}
+        for index, line in enumerate(lines):
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                if index == len(lines) - 1:
+                    break
+                raise
+            completed[(row["benchmark"], row["example_id"])] = row["outcome"]
+        return completed
+
+    def completed_bundle(self, attempt_id: str) -> Path:
+        record = self._read_state(attempt_id)
+        if record.get("status") != "completed" or not record.get("completed_bundle"):
+            raise ValueError(f"no completed bundle recorded for attempt: {attempt_id}")
+        return Path(record["completed_bundle"])
+
     def write_state(
         self,
         attempt_id: str,
