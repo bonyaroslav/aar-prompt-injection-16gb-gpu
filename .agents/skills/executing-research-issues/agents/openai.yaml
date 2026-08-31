@@ -1,0 +1,7 @@
+interface:
+  display_name: "Execute Research Issue"
+  short_description: "Safely run or recover one research issue"
+  default_prompt: "Use $executing-research-issues to execute Issue #16. Keep work within its acceptance criteria and stop on deviations."
+
+policy:
+  allow_implicit_invocation: false
