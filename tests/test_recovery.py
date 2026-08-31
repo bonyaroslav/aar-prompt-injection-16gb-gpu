@@ -1,6 +1,9 @@
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
-from runner.recovery import StageSignature
+from runner.recovery import RecoveryWorkspace, StageSignature
 
 
 class StageSignatureTests(unittest.TestCase):
@@ -43,6 +46,84 @@ class StageSignatureTests(unittest.TestCase):
         self.assertEqual(signature.digest, expected.digest)
         self.assertEqual(signature.payload, expected.payload)
         self.assertIsNone(signature.first_difference(expected))
+
+
+class RecoveryWorkspaceTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary_directory.cleanup)
+        temporary_root = Path(self.temporary_directory.name)
+        self.recovery_root = temporary_root / "recovery"
+        self.evidence_root = temporary_root / "evidence"
+        self.signature = self.signature_for()
+
+    def signature_for(self, **changes):
+        values = {
+            "manifest_digest": "sha256:manifest", "protocol_version": "phase1-2026-08-29",
+            "upstream_commit": "a" * 40, "upstream_tree": "b" * 40,
+            "model_revision": "c" * 40, "seed": 17, "stage": "evaluation",
+            "epoch": 1, "checkpoint_digest": "sha256:checkpoint",
+            "effective_evaluation_config": {"batch_size": 32},
+            "expected_example_ids": ["visible:0001", "visible:0002"],
+        }
+        values.update(changes)
+        return StageSignature.create(**values)
+
+    def test_compatible_safe_boundary_is_recoverable(self):
+        workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
+
+        workspace.write_state(
+            "attempt-1", self.signature, status="interrupted", recovery_reference="epoch-1"
+        )
+        inspection = workspace.inspect_stage("attempt-1", self.signature)
+
+        self.assertEqual((inspection.status, inspection.action), ("recoverable", "resume-from:epoch-1"))
+
+    def test_mismatched_signature_preserves_original_state(self):
+        workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
+        path = workspace.write_state(
+            "attempt-1", self.signature, status="interrupted", recovery_reference="epoch-1"
+        )
+
+        inspection = workspace.inspect_stage("attempt-1", self.signature_for(seed=42))
+
+        self.assertEqual(inspection.status, "incompatible")
+        self.assertEqual(inspection.differing_field, "seed")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["signature_digest"], self.signature.digest)
+
+    def test_tampered_stored_digest_is_an_incompatible_diagnostic(self):
+        workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
+        path = workspace.write_state(
+            "attempt-1", self.signature, status="completed", completed_bundle="not-a-bundle"
+        )
+        record = json.loads(path.read_text(encoding="utf-8"))
+        record["signature_digest"] = "sha256:forged"
+        path.write_text(json.dumps(record), encoding="utf-8")
+
+        inspection = workspace.inspect_stage("attempt-1", self.signature)
+
+        self.assertEqual(
+            (inspection.status, inspection.action, inspection.differing_field),
+            ("incompatible", "diagnose", "signature_digest"),
+        )
+
+    def test_malformed_state_is_a_hard_loss_diagnostic(self):
+        workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
+        path = workspace.write_state("attempt-1", self.signature, status="running")
+        record = json.loads(path.read_text(encoding="utf-8"))
+        del record["status"]
+        path.write_text(json.dumps(record), encoding="utf-8")
+
+        inspection = workspace.inspect_stage("attempt-1", self.signature)
+
+        self.assertEqual(
+            (inspection.status, inspection.action),
+            ("unavailable-after-hard-loss", "record-hard-loss"),
+        )
+
+    def test_rejects_recovery_root_inside_finalized_evidence_root(self):
+        with self.assertRaisesRegex(ValueError, "outside evidence root"):
+            RecoveryWorkspace(self.evidence_root / "recovery", self.evidence_root)
 
 
 if __name__ == "__main__":
