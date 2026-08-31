@@ -254,6 +254,10 @@ class RecoveryWorkspace:
             raise ValueError(f"no completed bundle recorded for attempt: {attempt_id}")
         return Path(record["completed_bundle"])
 
+    def recovery_reference(self, attempt_id: str) -> str | None:
+        """Return the durable recovery reference recorded for an attempt."""
+        return self._read_state(attempt_id).get("recovery_reference")
+
     def write_state(
         self,
         attempt_id: str,

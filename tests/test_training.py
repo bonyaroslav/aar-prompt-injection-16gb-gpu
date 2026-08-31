@@ -1,8 +1,12 @@
 import json, tempfile, unittest
 from pathlib import Path
 
-from runner.training import run_training, request_fallback, APPROVED_OOM_FALLBACK, OOM_FALLBACK_SEQUENCE_LENGTH
+from runner.training import (
+    TrainingRecovery, run_training, request_fallback, APPROVED_OOM_FALLBACK,
+    OOM_FALLBACK_SEQUENCE_LENGTH,
+)
 from runner.fakes import FakeTrainerAdapter, FakeTelemetryAdapter
+from runner.recovery import AttemptLedger, RecoveryWorkspace
 from runner.storage import LocalStorageAdapter
 from runner.bundle import verify_bundle, BUNDLE_FILES, CHECKSUM_FILE
 from protocol.validate_manifest import load as load_manifest
@@ -123,6 +127,114 @@ class TrainingStageTests(unittest.TestCase):
         src = Path(fakes_mod.__file__).read_text()
         for banned in ("torch", "transformers", "requests", "huggingface_hub", "socket"):
             self.assertNotIn(banned, src)
+
+
+class _InterruptingTrainer(FakeTrainerAdapter):
+    """Fails once after epoch 1 has been completely merged."""
+
+    def __init__(self, interrupt=True):
+        super().__init__()
+        self.train_calls = []
+        self.merge_calls = []
+        self._interrupt = interrupt
+        self._interrupted = False
+
+    def train_epoch(self, **kwargs):
+        self.train_calls.append(kwargs["epoch"])
+        if self._interrupt and kwargs["epoch"] == 2 and not self._interrupted:
+            self._interrupted = True
+            raise RuntimeError("injected interruption")
+        return super().train_epoch(**kwargs)
+
+    def merge_checkpoint(self, fingerprint, output_dir):
+        self.merge_calls.append(Path(output_dir).name)
+        return super().merge_checkpoint(fingerprint, output_dir)
+
+
+class _MergeInterruptingTrainer(_InterruptingTrainer):
+    def merge_checkpoint(self, fingerprint, output_dir):
+        if Path(output_dir).name == "epoch-2":
+            raise RuntimeError("injected merge interruption")
+        return super().merge_checkpoint(fingerprint, output_dir)
+
+
+class ResumableTrainingTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.storage = LocalStorageAdapter(root / "runs")
+        self.recovery_root = root / "recovery"
+        self.evidence_root = root / "runs"
+
+    def _recovery(self):
+        return TrainingRecovery(
+            RecoveryWorkspace(self.recovery_root, self.evidence_root),
+            "training-seed17",
+        )
+
+    def _run(self, trainer, run_id, recovery):
+        return run_training(
+            MANIFEST, trainer=trainer, telemetry=FakeTelemetryAdapter(),
+            storage=self.storage, seed=17, run_id=run_id, recovery=recovery,
+        )
+
+    def test_interrupted_attempt_reuses_completed_epoch_from_its_finalized_bundle(self):
+        recovery = self._recovery()
+        interrupted = _InterruptingTrainer()
+        with self.assertRaisesRegex(RuntimeError, "injected interruption"):
+            self._run(interrupted, "attempt-1", recovery)
+        self.assertEqual(interrupted.train_calls, [1, 2])
+
+        resumed_trainer = _InterruptingTrainer(interrupt=False)
+        resumed = self._run(resumed_trainer, "attempt-2", recovery)
+        self.assertEqual(resumed.outcome, "success")
+        self.assertEqual(resumed_trainer.train_calls, [2, 3])
+        self.assertEqual(resumed_trainer.merge_calls, ["epoch-2", "epoch-3"])
+        self.assertTrue(Path(resumed.metrics["checkpoints"]["epoch-1"]["merged_dir"]).is_dir())
+        verify_bundle(Path(resumed.bundle_dir))
+
+        replay_trainer = _InterruptingTrainer(interrupt=False)
+        replayed = self._run(replay_trainer, "attempt-3", recovery)
+        self.assertEqual(replay_trainer.train_calls, [])
+        self.assertEqual(replayed.bundle_dir, resumed.bundle_dir)
+
+        rows = AttemptLedger(self.recovery_root / "attempts.jsonl").rows()
+        self.assertEqual([row["status"] for row in rows], ["interrupted", "completed"])
+
+    def test_recovery_rejects_a_signature_with_a_different_seed(self):
+        recovery = self._recovery()
+        with self.assertRaisesRegex(RuntimeError, "injected interruption"):
+            self._run(_InterruptingTrainer(), "attempt-1", recovery)
+
+        with self.assertRaisesRegex(ValueError, "seed"):
+            run_training(
+                MANIFEST, trainer=_InterruptingTrainer(interrupt=False),
+                telemetry=FakeTelemetryAdapter(), storage=self.storage, seed=42,
+                run_id="attempt-2", recovery=recovery,
+            )
+
+    def test_recovery_rejects_a_tampered_completed_checkpoint(self):
+        recovery = self._recovery()
+        with self.assertRaisesRegex(RuntimeError, "injected interruption"):
+            self._run(_InterruptingTrainer(), "attempt-1", recovery)
+
+        state_key = "training-seed17-seq2048-epoch1"
+        checkpoint = json.loads(recovery.workspace.recovery_reference(state_key))
+        (Path(checkpoint["merged_dir"]) / "model.json").write_text("tampered", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "integrity"):
+            self._run(_InterruptingTrainer(interrupt=False), "attempt-2", recovery)
+
+    def test_merge_interruption_is_accounted_and_restarts_that_epoch(self):
+        recovery = self._recovery()
+        with self.assertRaisesRegex(RuntimeError, "injected merge interruption"):
+            self._run(_MergeInterruptingTrainer(interrupt=False), "attempt-1", recovery)
+
+        rows = AttemptLedger(self.recovery_root / "attempts.jsonl").rows()
+        self.assertEqual([row["status"] for row in rows], ["interrupted"])
+        resumed_trainer = _InterruptingTrainer(interrupt=False)
+        self._run(resumed_trainer, "attempt-2", recovery)
+        self.assertEqual(resumed_trainer.train_calls, [2, 3])
 
 
 if __name__ == "__main__":
