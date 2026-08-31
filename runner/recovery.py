@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import threading
 import uuid
 
 from runner.bundle import verify_bundle
@@ -92,7 +91,6 @@ def _write_json_atomically(path: Path, document: dict) -> None:
 class AttemptLedger:
     def __init__(self, path: Path):
         self.path = Path(path)
-        self._lock = threading.Lock()
 
     def rows(self) -> list[dict]:
         if not self.path.exists():
@@ -102,6 +100,32 @@ class AttemptLedger:
             for line in self.path.read_text(encoding="utf-8").splitlines()
             if line
         ]
+
+    def _claim_path(self, attempt_id: str) -> Path:
+        digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()
+        return self.path.parent / ".attempt-claims" / f"{digest}.claim"
+
+    def _claim(self, attempt_id: str) -> Path:
+        claim_path = self._claim_path(attempt_id)
+        claim_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            descriptor = os.open(
+                claim_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+        except FileExistsError as error:
+            raise ValueError(f"attempt identity already recorded: {attempt_id}") from error
+        try:
+            try:
+                os.write(descriptor, attempt_id.encode("utf-8"))
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        except BaseException:
+            claim_path.unlink(missing_ok=True)
+            raise
+        return claim_path
 
     def append(
         self,
@@ -125,14 +149,18 @@ class AttemptLedger:
             "gpu_hours": "unavailable" if gpu_hours is None else gpu_hours,
             "state_reference": state_reference,
         }
-        with self._lock:
-            if any(existing["attempt_id"] == attempt_id for existing in self.rows()):
-                raise ValueError(f"attempt identity already recorded: {attempt_id}")
+        if any(existing["attempt_id"] == attempt_id for existing in self.rows()):
+            raise ValueError(f"attempt identity already recorded: {attempt_id}")
+        claim_path = self._claim(attempt_id)
+        try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(row, sort_keys=True) + "\n")
                 handle.flush()
                 os.fsync(handle.fileno())
+        except BaseException:
+            claim_path.unlink(missing_ok=True)
+            raise
 
 
 class RecoveryWorkspace:

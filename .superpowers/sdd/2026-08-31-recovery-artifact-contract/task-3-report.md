@@ -53,3 +53,30 @@ had no test failures or errors.
 `AttemptLedger` supplies in-process duplicate exclusion via its lock plus a
 durable on-disk duplicate scan. Cross-process locking is outside this Task 3
 contract and was not added.
+
+## Round 1 remediation: shared duplicate claim
+
+The original concern was confirmed: two independent `AttemptLedger` instances
+could each scan an empty JSONL file and append the same attempt ID.
+
+- Added an exclusive `O_CREAT | O_EXCL` claim file under
+  `.attempt-claims/`, keyed by the SHA-256 digest of the attempt ID. The claim
+  is therefore shared by all ledger instances targeting the same recovery
+  workspace and never uses the raw attempt ID as a path component.
+- Existing ledger rows continue to reject a duplicate before a claim is made;
+  a new exclusive claim closes the scan-to-append race for concurrently empty
+  scans.
+- If a claim write, claim close, or ledger append fails, the claim file is
+  removed so the failed attempt does not leave an untracked durable claim.
+- Added a deterministic concurrent regression: two independent ledger
+  instances are synchronized after their initial empty scans, then race to
+  append the same attempt. Exactly one succeeds and exactly one JSONL row is
+  present. A second test makes the append fail and proves the claim is released
+  for a retry.
+
+### Round 1 verification
+
+```text
+python -m unittest discover -s tests -p test_recovery.py -v
+Ran 15 tests ... OK
+```

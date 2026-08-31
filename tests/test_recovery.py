@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -229,6 +230,73 @@ class AttemptLedgerTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "attempt identity already recorded"):
             ledger.append("attempt-1", self.signature, **kwargs)
+
+    def test_independent_ledgers_claim_one_concurrent_attempt_identity(self):
+        ledger_path = self.recovery_root / "attempts.jsonl"
+        ledgers = [recovery.AttemptLedger(ledger_path), recovery.AttemptLedger(ledger_path)]
+        scan_barrier = threading.Barrier(2)
+        start_barrier = threading.Barrier(2)
+        outcomes = []
+        outcome_lock = threading.Lock()
+        original_rows = recovery.AttemptLedger.rows
+
+        def synchronize_initial_scans(ledger):
+            rows = original_rows(ledger)
+            scan_barrier.wait(timeout=5)
+            return rows
+
+        def append_from(ledger):
+            start_barrier.wait(timeout=5)
+            try:
+                ledger.append(
+                    "attempt-1",
+                    self.signature,
+                    status="running",
+                    started_at="2026-08-31T10:00:00Z",
+                    ended_at=None,
+                    wall_seconds=0.0,
+                    gpu_hours=None,
+                    state_reference="states/attempt-1.json",
+                )
+            except ValueError as error:
+                outcome = error
+            else:
+                outcome = None
+            with outcome_lock:
+                outcomes.append(outcome)
+
+        with patch.object(recovery.AttemptLedger, "rows", synchronize_initial_scans):
+            threads = [threading.Thread(target=append_from, args=(ledger,)) for ledger in ledgers]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=5)
+
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(sum(outcome is None for outcome in outcomes), 1)
+        self.assertEqual(sum(isinstance(outcome, ValueError) for outcome in outcomes), 1)
+        self.assertEqual(
+            [row["attempt_id"] for row in recovery.AttemptLedger(ledger_path).rows()],
+            ["attempt-1"],
+        )
+
+    def test_failed_append_releases_claim_for_retry(self):
+        ledger = recovery.AttemptLedger(self.recovery_root / "attempts.jsonl")
+        kwargs = {
+            "status": "running",
+            "started_at": "2026-08-31T10:00:00Z",
+            "ended_at": None,
+            "wall_seconds": 0.0,
+            "gpu_hours": None,
+            "state_reference": "states/attempt-1.json",
+        }
+
+        with patch("runner.recovery.Path.open", side_effect=OSError("disk unavailable")):
+            with self.assertRaisesRegex(OSError, "disk unavailable"):
+                ledger.append("attempt-1", self.signature, **kwargs)
+
+        ledger.append("attempt-1", self.signature, **kwargs)
+        self.assertEqual([row["attempt_id"] for row in ledger.rows()], ["attempt-1"])
 
 
 class CompletedInspectionTests(unittest.TestCase):
