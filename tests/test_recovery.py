@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
+import runner.recovery as recovery
 from runner.recovery import RecoveryWorkspace, StageSignature
 
 
@@ -94,12 +96,29 @@ class RecoveryWorkspaceTests(unittest.TestCase):
             "attempt-1", self.signature, status="completed", completed_bundle="old-bundle"
         )
 
-        path = workspace.write_state(
-            "attempt-1", self.signature, status="interrupted", recovery_reference="epoch-2"
-        )
+        replacement_path = self.recovery_root / "attempt-1.json"
+        real_replace = recovery.os.replace
+        replacements = []
+
+        def capture_replace(source, destination):
+            source_path = Path(source)
+            destination_path = Path(destination)
+            self.assertTrue(source_path.exists())
+            self.assertEqual(destination_path, replacement_path)
+            self.assertEqual(source_path.parent, replacement_path.parent)
+            self.assertTrue(source_path.name.startswith(".attempt-1.json."))
+            self.assertTrue(source_path.name.endswith(".tmp"))
+            replacements.append((source_path, destination_path))
+            return real_replace(source, destination)
+
+        with patch("runner.recovery.os.replace", side_effect=capture_replace):
+            path = workspace.write_state(
+                "attempt-1", self.signature, status="interrupted", recovery_reference="epoch-2"
+            )
         record = json.loads(path.read_text(encoding="utf-8"))
         inspection = workspace.inspect_stage("attempt-1", self.signature)
 
+        self.assertEqual(len(replacements), 1)
         self.assertEqual(
             record,
             {

@@ -73,3 +73,28 @@ OK
 Self-review confirmed the resolved-path guard executes before parent-directory
 creation and therefore before any evidence-root write. `git diff --check`
 reported no whitespace errors.
+
+## Fix round 2: atomic-replacement regression
+
+The replacement-state regression now narrowly wraps
+`runner.recovery.os.replace` only for the second write. Immediately before it
+delegates to the saved real syscall, the hook proves that the source temporary
+file exists, belongs beside the state file, follows the generated temporary
+name pattern, and targets the durable attempt state path. The test then checks
+the complete replacement document and its recoverable inspection outcome.
+
+For the red phase, the atomic replacement line was temporarily mutated to an
+in-place write. The regression failed with `AssertionError: 0 != 1`, proving
+that it fails when no `os.replace` call occurs. Restoring the atomic syscall
+produced this focused Ubuntu WSL result:
+
+```text
+/mnt/c/Projects/automated_alignment_researcher/.venv/bin/python -m unittest discover -s tests -p test_recovery.py -v
+Ran 10 tests in 0.005s
+OK
+```
+
+Self-review: the hook calls the saved real `os.replace`, so it observes the
+external boundary without replacing filesystem behavior; its assertions are
+made before that call, and the post-write assertions retain the real
+consumer-visible state check.
