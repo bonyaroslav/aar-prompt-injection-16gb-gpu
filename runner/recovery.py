@@ -96,7 +96,14 @@ class RecoveryWorkspace:
             raise ValueError("recovery workspace must be outside evidence root")
 
     def _state_path(self, attempt_id: str) -> Path:
-        return self.root / f"{attempt_id}.json"
+        if not isinstance(attempt_id, str) or attempt_id in {"", ".", ".."}:
+            raise ValueError("attempt ID must identify a state file")
+        path = self.root / f"{attempt_id}.json"
+        try:
+            path.resolve().relative_to(self.root.resolve())
+        except ValueError as error:
+            raise ValueError("attempt ID must stay inside the recovery workspace") from error
+        return path
 
     def _read_state(self, attempt_id: str) -> dict:
         return json.loads(self._state_path(attempt_id).read_text(encoding="utf-8"))

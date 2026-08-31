@@ -79,6 +79,39 @@ class RecoveryWorkspaceTests(unittest.TestCase):
 
         self.assertEqual((inspection.status, inspection.action), ("recoverable", "resume-from:epoch-1"))
 
+    def test_rejects_traversal_attempt_id_without_writing_evidence(self):
+        workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
+        evidence_state = self.evidence_root / "attempt.json"
+
+        with self.assertRaisesRegex(ValueError, "attempt ID"):
+            workspace.write_state("../evidence/attempt", self.signature, status="running")
+
+        self.assertFalse(evidence_state.exists())
+
+    def test_replacing_an_attempt_state_exposes_a_complete_valid_document(self):
+        workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
+        workspace.write_state(
+            "attempt-1", self.signature, status="completed", completed_bundle="old-bundle"
+        )
+
+        path = workspace.write_state(
+            "attempt-1", self.signature, status="interrupted", recovery_reference="epoch-2"
+        )
+        record = json.loads(path.read_text(encoding="utf-8"))
+        inspection = workspace.inspect_stage("attempt-1", self.signature)
+
+        self.assertEqual(
+            record,
+            {
+                "completed_bundle": None,
+                "recovery_reference": "epoch-2",
+                "signature": self.signature.payload,
+                "signature_digest": self.signature.digest,
+                "status": "interrupted",
+            },
+        )
+        self.assertEqual((inspection.status, inspection.action), ("recoverable", "resume-from:epoch-2"))
+
     def test_mismatched_signature_preserves_original_state(self):
         workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
         path = workspace.write_state(
