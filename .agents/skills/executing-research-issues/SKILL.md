@@ -8,8 +8,6 @@ disable-model-invocation: true
 
 Handle one issue at a time with the least evidence and activity needed to reach a defensible result.
 
-Run this project workflow with `gpt-5.6-terra` at High reasoning. The skill cannot change the task's model setting. If visible task metadata shows another model or effort, stop and report the mismatch; if metadata is unavailable, do not guess.
-
 ## Invocation
 
 Require a mode and issue number:
