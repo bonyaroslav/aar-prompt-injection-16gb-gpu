@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import threading
 import uuid
 
 from runner.bundle import verify_bundle
@@ -88,6 +89,52 @@ def _write_json_atomically(path: Path, document: dict) -> None:
     os.replace(temporary, path)
 
 
+class AttemptLedger:
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self._lock = threading.Lock()
+
+    def rows(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        return [
+            json.loads(line)
+            for line in self.path.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+
+    def append(
+        self,
+        attempt_id: str,
+        signature: StageSignature,
+        *,
+        status: str,
+        started_at: str,
+        ended_at: str | None,
+        wall_seconds: float,
+        gpu_hours: float | None,
+        state_reference: str,
+    ) -> None:
+        row = {
+            "attempt_id": attempt_id,
+            "signature_digest": signature.digest,
+            "status": status,
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "wall_seconds": wall_seconds,
+            "gpu_hours": "unavailable" if gpu_hours is None else gpu_hours,
+            "state_reference": state_reference,
+        }
+        with self._lock:
+            if any(existing["attempt_id"] == attempt_id for existing in self.rows()):
+                raise ValueError(f"attempt identity already recorded: {attempt_id}")
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+
+
 class RecoveryWorkspace:
     def __init__(self, root: Path, evidence_root: Path):
         self.root = Path(root)
@@ -125,7 +172,9 @@ class RecoveryWorkspace:
                 "signature_digest": signature.digest,
                 "status": status,
                 "recovery_reference": recovery_reference,
-                "completed_bundle": completed_bundle,
+                "completed_bundle": (
+                    str(completed_bundle) if completed_bundle is not None else None
+                ),
             },
         )
         return path

@@ -178,5 +178,94 @@ class RecoveryWorkspaceTests(unittest.TestCase):
             RecoveryWorkspace(self.evidence_root / "recovery", self.evidence_root)
 
 
+class AttemptLedgerTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary_directory.cleanup)
+        temporary_root = Path(self.temporary_directory.name)
+        self.recovery_root = temporary_root / "recovery"
+        self.signature = StageSignature.create(
+            manifest_digest="sha256:manifest",
+            protocol_version="phase1-2026-08-29",
+            upstream_commit="a" * 40,
+            upstream_tree="b" * 40,
+            model_revision="c" * 40,
+            seed=17,
+            stage="evaluation",
+            epoch=1,
+            checkpoint_digest="sha256:checkpoint",
+            effective_evaluation_config={"batch_size": 32},
+            expected_example_ids=["visible:0001", "visible:0002"],
+        )
+
+    def test_ledger_preserves_unavailable_gpu_time_and_attempt_identity(self):
+        ledger = recovery.AttemptLedger(self.recovery_root / "attempts.jsonl")
+
+        ledger.append(
+            "attempt-1",
+            self.signature,
+            status="interrupted",
+            started_at="2026-08-31T10:00:00Z",
+            ended_at="2026-08-31T10:05:00Z",
+            wall_seconds=300.0,
+            gpu_hours=None,
+            state_reference="states/attempt-1.json",
+        )
+
+        row = json.loads((self.recovery_root / "attempts.jsonl").read_text().strip())
+        self.assertEqual((row["attempt_id"], row["gpu_hours"]), ("attempt-1", "unavailable"))
+
+    def test_ledger_rejects_duplicate_attempt_identity(self):
+        ledger = recovery.AttemptLedger(self.recovery_root / "attempts.jsonl")
+        kwargs = {
+            "status": "running",
+            "started_at": "2026-08-31T10:00:00Z",
+            "ended_at": None,
+            "wall_seconds": 0.0,
+            "gpu_hours": None,
+            "state_reference": "states/attempt-1.json",
+        }
+        ledger.append("attempt-1", self.signature, **kwargs)
+
+        with self.assertRaisesRegex(ValueError, "attempt identity already recorded"):
+            ledger.append("attempt-1", self.signature, **kwargs)
+
+
+class CompletedInspectionTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary_directory.cleanup)
+        temporary_root = Path(self.temporary_directory.name)
+        self.recovery_root = temporary_root / "recovery"
+        self.evidence_root = temporary_root / "evidence"
+        self.signature = StageSignature.create(
+            manifest_digest="sha256:manifest",
+            protocol_version="phase1-2026-08-29",
+            upstream_commit="a" * 40,
+            upstream_tree="b" * 40,
+            model_revision="c" * 40,
+            seed=17,
+            stage="evaluation",
+            epoch=1,
+            checkpoint_digest="sha256:checkpoint",
+            effective_evaluation_config={"batch_size": 32},
+            expected_example_ids=["visible:0001", "visible:0002"],
+        )
+
+    def test_completed_state_with_invalid_bundle_is_not_completed(self):
+        workspace = RecoveryWorkspace(self.recovery_root, self.evidence_root)
+        workspace.write_state(
+            "attempt-1",
+            self.signature,
+            status="completed",
+            completed_bundle=self.evidence_root / "bad",
+        )
+
+        self.assertEqual(
+            workspace.inspect_stage("attempt-1", self.signature).status,
+            "unavailable-after-hard-loss",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
