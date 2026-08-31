@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import Iterable
 import uuid
 
 from runner.bundle import verify_bundle
@@ -24,6 +25,19 @@ SIGNATURE_FIELDS = (
     "effective_evaluation_config",
     "expected_example_ids",
 )
+
+
+def finalized_inputs_only(paths: Iterable[Path], recovery_root: Path) -> list[Path]:
+    """Return finalized evidence bundles, rejecting every recovery-workspace path."""
+    recovery_root = Path(recovery_root).resolve()
+    accepted = []
+    for candidate in map(Path, paths):
+        resolved = candidate.resolve()
+        if resolved == recovery_root or recovery_root in resolved.parents:
+            raise ValueError(f"recovery workspace is not a finalized input: {candidate}")
+        verify_bundle(resolved)
+        accepted.append(resolved)
+    return accepted
 
 
 @dataclass(frozen=True)
