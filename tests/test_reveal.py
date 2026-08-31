@@ -7,8 +7,10 @@ from runner.core import run_baseline
 from runner.fakes import FakeModelAdapter, FakeDatasetAdapter, FakeScorerAdapter, FakeTelemetryAdapter
 from runner.reveal import (
     run_trained_held_out_evaluation, finalize_and_authorize_selection,
-    build_reveal_package, run_reveal,
+    build_reveal_package, run_reveal, HeldOutRevealRecovery,
+    run_selection_and_reveal,
 )
+from runner.recovery import AttemptLedger, RecoveryWorkspace
 from runner.selection import select_checkpoint
 from runner.storage import LocalStorageAdapter
 
@@ -24,6 +26,28 @@ class ShiftedInjecAgentDatasetAdapter(FakeDatasetAdapter):
         if benchmark == "injecagent":
             return [{"id": f"injecagent-shifted-{i:04d}"} for i in range(sample_count)]
         return super().load_items(benchmark, sample_count)
+
+
+class CountingInjecAgentModel(FakeModelAdapter):
+    """Records the private evaluation boundary without exposing its payload."""
+
+    def __init__(self):
+        self.injecagent_generations = 0
+
+    def generate(self, benchmark: str, item: dict, config: dict) -> str:
+        if benchmark == "injecagent":
+            self.injecagent_generations += 1
+        return super().generate(benchmark, item, config)
+
+
+class CountingHeldOutSealer(HeldOutSealer):
+    def __init__(self, root):
+        super().__init__(root)
+        self.reveal_calls = 0
+
+    def reveal(self, selection_record: dict):
+        self.reveal_calls += 1
+        return super().reveal(selection_record)
 
 
 class RevealTests(unittest.TestCase):
@@ -157,6 +181,86 @@ class RevealTests(unittest.TestCase):
                 MANIFEST, model=FakeModelAdapter(), dataset=ShiftedInjecAgentDatasetAdapter(),
                 scorer=FakeScorerAdapter(), sealer=sealer,
             )
+
+
+class HeldOutRevealTransactionTests(unittest.TestCase):
+    """Issue #20: every durable boundary retries without a second private run."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.heldout_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.heldout_tmp.cleanup)
+        self.storage = LocalStorageAdapter(self.tmp.name)
+        self.workspace = RecoveryWorkspace(Path(self.heldout_tmp.name) / "recovery", Path(self.tmp.name))
+        self.recovery = HeldOutRevealRecovery(self.workspace, "selected-heldout")
+        self.selection_path = Path(self.tmp.name) / "selection.json"
+        self.sealer = CountingHeldOutSealer(self.heldout_tmp.name)
+        self.baseline = run_baseline(
+            MANIFEST, model=FakeModelAdapter(), dataset=FakeDatasetAdapter(), scorer=FakeScorerAdapter(),
+            telemetry=FakeTelemetryAdapter(), storage=self.storage, held_out_sealer=self.sealer,
+            run_id="transaction-baseline",
+        )
+        candidate = {
+            "epoch": 1,
+            "checkpoint_digest": "sha256:selected-checkpoint",
+            "benchmarks": self.baseline.metrics["benchmarks"],
+        }
+        self.record = select_checkpoint(
+            MANIFEST, baseline_benchmarks=self.baseline.metrics["benchmarks"], candidates=[candidate],
+        )
+
+    def _run(self, model, *, record=None, checkpoint_digest=None, authorization_identity="evaluator-a", fail_after=None):
+        return run_selection_and_reveal(
+            MANIFEST,
+            selection_record=self.record if record is None else record,
+            selection_path=self.selection_path,
+            sealer=self.sealer,
+            model=model,
+            dataset=FakeDatasetAdapter(),
+            scorer=FakeScorerAdapter(),
+            storage=self.storage,
+            telemetry=FakeTelemetryAdapter(),
+            recovery=self.recovery,
+            checkpoint_digest=checkpoint_digest,
+            authorization_identity=authorization_identity,
+            fail_after=fail_after,
+        )
+
+    def test_failure_after_each_transition_retries_one_logical_evaluation_and_reveal(self):
+        for transition in ("SEALED", "SELECTION_FINALIZED", "AUTHORIZED", "TRAINED_RESULT_SEALED", "REVEALED"):
+            with self.subTest(transition=transition):
+                self.setUp()
+                model = CountingInjecAgentModel()
+                with self.assertRaisesRegex(RuntimeError, f"injected failure after {transition}"):
+                    self._run(model, fail_after=transition)
+                result = self._run(model)
+                self.assertEqual(result.state, "REVEALED")
+                self.assertEqual(model.injecagent_generations, 200)
+                self.assertEqual(result.reveal_count, 1)
+                self.assertEqual(self.sealer.reveal_calls, 1)
+                verify_bundle(Path(result.reveal.bundle_dir))
+                self.assertEqual(
+                    [row["status"] for row in AttemptLedger(self.workspace.root / "attempts.jsonl").rows()],
+                    ["SEALED", "SELECTION_FINALIZED", "AUTHORIZED", "TRAINED_RESULT_SEALED", "REVEALED"],
+                )
+
+    def test_retry_rejects_changed_transaction_identity_inputs(self):
+        model = CountingInjecAgentModel()
+        with self.assertRaisesRegex(RuntimeError, "injected failure after AUTHORIZED"):
+            self._run(model, fail_after="AUTHORIZED")
+        changed_selection = dict(self.record, selected_checkpoint_digest="sha256:other")
+        with self.assertRaisesRegex(ValueError, "selection digest"):
+            self._run(model, record=changed_selection)
+        with self.assertRaisesRegex(ValueError, "checkpoint"):
+            self._run(model, checkpoint_digest="sha256:other")
+        with self.assertRaisesRegex(ValueError, "authorization identity"):
+            self._run(model, authorization_identity="evaluator-b")
+        state = json.loads(self.sealer.state_file.read_text(encoding="utf-8"))
+        state["candidates"] = "sha256:changed-commitment"
+        self.sealer._write(state)
+        with self.assertRaisesRegex(ValueError, "candidate commitment"):
+            self._run(model)
 
 
 if __name__ == "__main__":

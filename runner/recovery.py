@@ -258,6 +258,36 @@ class RecoveryWorkspace:
         """Return the durable recovery reference recorded for an attempt."""
         return self._read_state(attempt_id).get("recovery_reference")
 
+    def transaction_state(self, transaction_id: str) -> dict:
+        """Read an opaque durable transaction record.
+
+        Transaction payloads are deliberately kept in the recovery workspace,
+        never in finalized evidence bundles.  Callers own the payload schema;
+        this primitive only supplies the same atomic boundary and signature
+        envelope used by the training/evaluation recovery stages.
+        """
+        record = self._read_state(transaction_id)
+        if "transaction" not in record:
+            raise ValueError(f"no transaction state recorded for: {transaction_id}")
+        return record
+
+    def write_transaction_state(
+        self, transaction_id: str, signature: StageSignature, *, state: str,
+        transaction: dict,
+    ) -> Path:
+        """Atomically persist one opaque transaction transition."""
+        path = self._state_path(transaction_id)
+        _write_json_atomically(
+            path,
+            {
+                "signature": signature.payload,
+                "signature_digest": signature.digest,
+                "status": state,
+                "transaction": transaction,
+            },
+        )
+        return path
+
     def write_state(
         self,
         attempt_id: str,

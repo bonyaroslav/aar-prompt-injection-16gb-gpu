@@ -9,7 +9,8 @@ class HeldOutSealer:
         try: os.chmod(self.root, 0o700)
         except OSError: pass
         self.state_file = self.root / "state.json"
-        if not self.state_file.exists(): self._write({"state": "SEALED", "candidates": None, "validity": None})
+        if not self.state_file.exists():
+            self._write({"state": "SEALED", "candidates": None, "validity": None, "receipts": {}})
 
     def _read(self): return json.loads(self.state_file.read_text(encoding="utf-8"))
     def _write(self, value):
@@ -27,15 +28,40 @@ class HeldOutSealer:
         s = self._read()
         return {"state": s["state"], "candidates": s["candidates"], "validity": s["validity"]}
     def store_receipt(self, label: str, payload: bytes, valid: int, invalid: int):
-        if self._read()["state"] != "SEALED": raise RuntimeError("results may only be stored while sealed")
+        s = self._read()
+        if s["state"] not in {"SEALED", "AUTHORIZED"}:
+            raise RuntimeError("results may only be stored before reveal completion")
+        receipt = {"label": label, "digest": self.digest(payload), "valid": valid, "invalid": invalid}
+        existing = self.receipt(label)
+        if existing is not None:
+            if existing != receipt:
+                raise RuntimeError(f"receipt already sealed with different content: {label}")
+            return existing
         path = self.root / f"{label}.blob"; path.write_bytes(payload)
         try: os.chmod(path, 0o600)
         except OSError: pass
-        return {"label": label, "digest": self.digest(payload), "valid": valid, "invalid": invalid}
-    def authorize(self, selection_record: dict):
+        s.setdefault("receipts", {})[label] = receipt
+        self._write(s)
+        return receipt
+    def receipt(self, label: str):
+        """Return public receipt metadata only; never load the sealed blob."""
+        return self._read().get("receipts", {}).get(label)
+    def authorize(self, selection_record: dict, authorization_identity: str = "default"):
         s = self._read()
         if s["candidates"] is None or not selection_record.get("finalized"): raise PermissionError("selection is not finalized")
-        s["state"] = "AUTHORIZED"; s["selection_digest"] = self.digest(selection_record); self._write(s)
+        selection_digest = self.digest(selection_record)
+        if s["state"] == "AUTHORIZED":
+            if (s.get("selection_digest") != selection_digest or
+                    s.get("authorization_identity", "default") != authorization_identity):
+                raise PermissionError("held-out authorization identity or selection changed")
+            return
+        if s["state"] != "SEALED":
+            raise PermissionError("held-out authorization is no longer available")
+        s.update(
+            state="AUTHORIZED", selection_digest=selection_digest,
+            authorization_identity=authorization_identity,
+        )
+        self._write(s)
     def reveal(self, selection_record: dict):
         s = self._read()
         if s["state"] != "AUTHORIZED" or s.get("selection_digest") != self.digest(selection_record): raise PermissionError("held-out reveal is unauthorized")
