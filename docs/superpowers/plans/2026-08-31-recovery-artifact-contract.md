@@ -29,7 +29,7 @@
 - Produces: `StageSignature.create(*, manifest_digest, protocol_version, upstream_commit, upstream_tree, model_revision, seed, stage, epoch=None, checkpoint_digest=None, effective_evaluation_config=None, expected_example_ids=None) -> StageSignature`
 - Produces: `StageSignature.digest: str`, `StageSignature.payload: dict`, `StageSignature.first_difference(other: StageSignature) -> str | None`
 
-- [ ] **Step 1: Write the failing signature tests**
+- [x] **Step 1: Write the failing signature tests**
 
 ```python
 class StageSignatureTests(unittest.TestCase):
@@ -52,13 +52,13 @@ class StageSignatureTests(unittest.TestCase):
         self.assertEqual(self._signature().first_difference(self._signature(seed=42)), "seed")
 ```
 
-- [ ] **Step 2: Run the signature tests and verify they fail because `StageSignature` is absent**
+- [x] **Step 2: Run the signature tests and verify they fail because `StageSignature` is absent**
 
 Run: `python -m unittest tests.test_recovery.StageSignatureTests -v`
 
 Expected: Import failure naming `runner.recovery` or `StageSignature`.
 
-- [ ] **Step 3: Implement the immutable canonical signature**
+- [x] **Step 3: Implement the immutable canonical signature**
 
 ```python
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ class StageSignature:
         return next((key for key in SIGNATURE_FIELDS if self.payload[key] != other.payload[key]), None)
 ```
 
-- [ ] **Step 4: Run the signature tests and verify they pass**
+- [x] **Step 4: Run the signature tests and verify they pass**
 
 Run: `python -m unittest tests.test_recovery.StageSignatureTests -v`
 
@@ -94,7 +94,7 @@ Expected: 2 tests pass.
 - Produces: `RecoveryWorkspace.write_state(attempt_id, signature, *, status, recovery_reference=None, completed_bundle=None) -> Path`
 - Produces: `RecoveryWorkspace.inspect_stage(attempt_id, requested_signature) -> StageInspection`
 
-- [ ] **Step 1: Write failing atomic-state and mismatch tests**
+- [x] **Step 1: Write failing atomic-state and mismatch tests**
 
 ```python
 def test_compatible_safe_boundary_is_recoverable(self):
@@ -116,13 +116,13 @@ def test_rejects_recovery_root_inside_finalized_evidence_root(self):
         RecoveryWorkspace(self.evidence_root / "recovery", self.evidence_root)
 ```
 
-- [ ] **Step 2: Run the recovery-state tests and verify they fail because workspace methods are absent**
+- [x] **Step 2: Run the recovery-state tests and verify they fail because workspace methods are absent**
 
 Run: `python -m unittest tests.test_recovery.RecoveryWorkspaceTests -v`
 
 Expected: failure naming `RecoveryWorkspace` or its missing method.
 
-- [ ] **Step 3: Implement temp-file-plus-replace state persistence and inspection**
+- [x] **Step 3: Implement temp-file-plus-replace state persistence and inspection**
 
 ```python
 def _write_json_atomically(path: Path, document: dict) -> None:
@@ -152,7 +152,7 @@ def inspect_stage(self, attempt_id, requested_signature):
     return StageInspection("unavailable-after-hard-loss", "record-hard-loss")
 ```
 
-- [ ] **Step 4: Run the recovery-state tests and verify they pass**
+- [x] **Step 4: Run the recovery-state tests and verify they pass**
 
 Run: `python -m unittest tests.test_recovery.RecoveryWorkspaceTests -v`
 
@@ -169,7 +169,7 @@ Expected: all `RecoveryWorkspaceTests` pass.
 - Produces: `AttemptLedger.append(attempt_id, signature, *, status, started_at, ended_at, wall_seconds, gpu_hours, state_reference) -> None`
 - Produces: `RecoveryWorkspace.inspect_stage(...) -> StageInspection` with `completed` only for a verified bundle.
 
-- [ ] **Step 1: Write failing ledger and checksum-gating tests**
+- [x] **Step 1: Write failing ledger and checksum-gating tests**
 
 ```python
 def test_ledger_preserves_unavailable_gpu_time_and_attempt_identity(self):
@@ -194,13 +194,13 @@ def test_completed_state_with_invalid_bundle_is_not_completed(self):
     self.assertEqual(workspace.inspect_stage("attempt-1", self.signature).status, "unavailable-after-hard-loss")
 ```
 
-- [ ] **Step 2: Run the ledger tests and verify they fail because ledger/checksum behavior is absent**
+- [x] **Step 2: Run the ledger tests and verify they fail because ledger/checksum behavior is absent**
 
 Run: `python -m unittest tests.test_recovery.AttemptLedgerTests tests.test_recovery.CompletedInspectionTests -v`
 
 Expected: failure naming `AttemptLedger` or returning a non-compliant completed status.
 
-- [ ] **Step 3: Implement append-and-flush ledger writes and checksum validation**
+- [x] **Step 3: Implement append-and-flush ledger writes and checksum validation**
 
 ```python
 def append(self, attempt_id, signature, *, status, started_at, ended_at, wall_seconds, gpu_hours, state_reference):
@@ -216,7 +216,7 @@ def append(self, attempt_id, signature, *, status, started_at, ended_at, wall_se
         os.fsync(handle.fileno())
 ```
 
-- [ ] **Step 4: Run the ledger tests and verify they pass**
+- [x] **Step 4: Run the ledger tests and verify they pass**
 
 Run: `python -m unittest tests.test_recovery.AttemptLedgerTests tests.test_recovery.CompletedInspectionTests -v`
 
@@ -233,7 +233,7 @@ Expected: all targeted tests pass.
 - Produces: `finalized_inputs_only(paths: Iterable[Path], recovery_root: Path) -> list[Path]`
 - Consumes: finalized bundles with `checksums.sha256`; the fixture uses the existing bundle writer/finalizer.
 
-- [ ] **Step 1: Write failing guard and uninterrupted/resumed-topology tests**
+- [x] **Step 1: Write failing guard and uninterrupted/resumed-topology tests**
 
 ```python
 def test_finalized_inputs_reject_recovery_and_non_checksummed_paths(self):
@@ -247,13 +247,13 @@ def test_uninterrupted_and_resumed_fixture_expose_same_finalized_topology(self):
     self.assertEqual(self._topology(uninterrupted), {"training", "eval-1", "eval-2", "eval-3", "selection", "reveal", "resources"})
 ```
 
-- [ ] **Step 2: Run the guard/topology tests and verify they fail because the guard is absent**
+- [x] **Step 2: Run the guard/topology tests and verify they fail because the guard is absent**
 
 Run: `python -m unittest tests.test_recovery.FinalizedInputTests -v`
 
 Expected: import or assertion failure naming `finalized_inputs_only`.
 
-- [ ] **Step 3: Implement the narrow guard and document the acceptance evidence**
+- [x] **Step 3: Implement the narrow guard and document the acceptance evidence**
 
 ```python
 def finalized_inputs_only(paths, recovery_root):
@@ -282,13 +282,13 @@ Write `docs/issue-17-recovery-contract-decision.md` with this evidence table:
 
 State that the #16 decision fixes completed-epoch, whole-evaluation, and whole-selection recovery boundaries; that this implementation makes no manifest or protocol change; and that finalized evidence bundles were not modified.
 
-- [ ] **Step 4: Run targeted recovery tests and verify they pass**
+- [x] **Step 4: Run targeted recovery tests and verify they pass**
 
 Run: `python -m unittest tests.test_recovery -v`
 
 Expected: all recovery tests pass.
 
-- [ ] **Step 5: Add explicit status coverage**
+- [x] **Step 5: Add explicit status coverage**
 
 ```python
 def test_inspection_exposes_each_required_status(self):
@@ -307,19 +307,19 @@ Expected: every required status is exercised with a defined continuation action.
 - Modify: `tests/test_recovery.py`
 - Create: `docs/issue-17-recovery-contract-decision.md`
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 Run: `python -m unittest discover -s tests -v`
 
 Expected: exit code 0 with no failures or errors.
 
-- [ ] **Step 2: Validate the issue-only diff and canonical document**
+- [x] **Step 2: Validate the issue-only diff and canonical document**
 
 Run: `git diff --check HEAD; git diff --name-only HEAD`
 
 Expected: no whitespace errors and only issue #17 paths beyond the committed design document.
 
-- [ ] **Step 3: Commit the implementation with explicit paths**
+- [x] **Step 3: Commit the implementation with explicit paths**
 
 Run: `git add runner/recovery.py tests/test_recovery.py docs/issue-17-recovery-contract-decision.md && git commit -m "feat: add issue 17 recovery contract"`
 
