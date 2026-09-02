@@ -127,11 +127,19 @@ def _mmlu_prompt(item: dict) -> str:
 class RealModelAdapter:
     """Benchmark-aware translation from runner items to the real HF model API."""
 
+    #: Attempt-1 MMLU candidate strings and template mode.  Both are constructor
+    #: parameters so the issue-30 chat-mode diagnostic can flip them under its own
+    #: separately versioned protocol; the defaults reproduce Attempt-1 exactly.
+    MMLU_CANDIDATE_STRINGS = (" A", " B", " C", " D")
+
     def __init__(self, model_ref=None, revision=None, upstream_root=None, decoding=None,
-                 backend=None, apis=None, backend_factory=None, clock=time.monotonic):
+                 backend=None, apis=None, backend_factory=None, clock=time.monotonic,
+                 mmlu_use_chat_template=False, mmlu_candidate_strings=None):
         self.decoding = dict(decoding or {})
         self.apis = dict(apis or {})
         self.clock = clock
+        self.mmlu_use_chat_template = bool(mmlu_use_chat_template)
+        self.mmlu_candidate_strings = list(mmlu_candidate_strings or self.MMLU_CANDIDATE_STRINGS)
         self._timings: dict[str, list[float]] = {}
         if backend is None:
             if not model_ref:
@@ -232,7 +240,8 @@ class RealModelAdapter:
 
         if benchmark == "mmlu":
             logits = self._timed(benchmark, self.backend.candidate_logits,
-                _mmlu_prompt(item), [" A", " B", " C", " D"], use_chat_template=False
+                _mmlu_prompt(item), list(self.mmlu_candidate_strings),
+                use_chat_template=self.mmlu_use_chat_template,
             )
             predicted = max(range(len(logits)), key=lambda index: logits[index])
             return json.dumps({"predicted": predicted})

@@ -174,6 +174,37 @@ class RealModelAdapterTests(unittest.TestCase):
         self.assertEqual(candidates, [" A", " B", " C", " D"])
         self.assertFalse(chat)
 
+    def test_mmlu_chat_template_defaults_off_and_is_honoured_when_enabled(self):
+        item = {"question": "Q?", "choices": ["one", "two", "three", "four"], "answer": 2}
+
+        default_backend = RecordingBackend(logits=[-3.0, -2.0, 9.0, -4.0])
+        RealModelAdapter(backend=default_backend).generate("mmlu", item, {"max_new_tokens": 1})
+        _, default_candidates, default_chat = default_backend.logit_calls[0]
+        self.assertEqual(default_candidates, [" A", " B", " C", " D"])
+        self.assertFalse(default_chat)
+
+        chat_backend = RecordingBackend(logits=[-3.0, -2.0, 9.0, -4.0])
+        RealModelAdapter(backend=chat_backend, mmlu_use_chat_template=True).generate(
+            "mmlu", item, {"max_new_tokens": 1}
+        )
+        _, chat_candidates, chat_flag = chat_backend.logit_calls[0]
+        self.assertEqual(chat_candidates, [" A", " B", " C", " D"])
+        self.assertTrue(chat_flag)
+
+    def test_mmlu_candidate_strings_are_overridable_for_the_robustness_rerun(self):
+        item = {"question": "Q?", "choices": ["one", "two", "three", "four"], "answer": 2}
+        backend = RecordingBackend(logits=[-3.0, -2.0, 9.0, -4.0])
+        model = RealModelAdapter(
+            backend=backend, mmlu_use_chat_template=True,
+            mmlu_candidate_strings=["A", "B", "C", "D"],
+        )
+
+        model.generate("mmlu", item, {"max_new_tokens": 1})
+
+        _, candidates, chat_flag = backend.logit_calls[0]
+        self.assertEqual(candidates, ["A", "B", "C", "D"])
+        self.assertTrue(chat_flag)
+
     def test_injecagent_data_stealing_success_runs_the_paper_second_step(self):
         backend = RecordingBackend(outputs=["first tool call", "second tool call"])
         model = RealModelAdapter(backend=backend, apis={

@@ -1,0 +1,133 @@
+{
+  "schema": "aar-prompt-injection-diagnostic/v1",
+  "diagnostic_version": "diag-chatmode-mmlu-2026-09-02",
+  "purpose": "Settle the largest confound in the Attempt-1 headline finding: the one benchmark that held up (MMLU) is the one scored without the chat template, in raw-completion mode. Re-score MMLU on the frozen baseline and every finalized checkpoint with the chat template enabled, paired item by item against the Attempt-1 result. Re-scoring only; no training, no new checkpoints.",
+  "downstream_of": {
+    "protocol_version": "phase1-2026-08-29",
+    "canonical_manifest_digest": "399cf1572ccf580f4741429230cb556840a7e1c9fdb514ba053c9a6f16ce7f20",
+    "raw_manifest_sha256": "296e093bb1a6fc72f6e4cdf6ed3de5cde77a9e3da90df73db4538a2a98e6f4ac",
+    "relationship": "This diagnostic is explicitly downstream of finalized Attempt-1 evidence. It runs only after the frozen manifest above is unchanged; runner.diagnostic loaders fail closed if the live protocol/manifest.json no longer produces canonical_manifest_digest."
+  },
+  "authorization": {
+    "issue": "https://github.com/bonyaroslav/aar-prompt-injection-16gb-gpu/issues/30",
+    "statement": "The diagnostic protocol version is authorized in writing in the issue #30 body ('This authorization is granted here in writing'). This is an authorized deviation being executed, not a deviation being decided."
+  },
+  "baseline": {
+    "reuse": "frozen Attempt-1 baseline",
+    "bundle": "runs/real-baseline-20260829-205020",
+    "metrics": "runs/real-baseline-20260829-205020/metrics.json",
+    "justification": "The frozen Attempt-1 baseline is declared as this diagnostic's baseline because model identity, model revision, evaluation suite, sample identifiers, decoding block and scorer are all unchanged between Attempt-1 and this diagnostic. Only evaluation.capability.mmlu.use_chat_template differs (false -> true). No fresh baseline evaluation is run; the Attempt-1 baseline's raw-mode MMLU per-item scores are the paired comparison target, and the baseline model is re-scored in chat mode as one of the model states below."
+  },
+  "model": {
+    "id": "Qwen/Qwen3.5-2B",
+    "revision": "15852e8c16360a2fea060d615a32b45270f8a8fc",
+    "tokenizer_revision": "15852e8c16360a2fea060d615a32b45270f8a8fc"
+  },
+  "change": {
+    "benchmark": "mmlu",
+    "parameter": "use_chat_template",
+    "attempt_1_value": false,
+    "diagnostic_value": true,
+    "candidate_strings": [" A", " B", " C", " D"],
+    "scorer": "first_token_logit",
+    "metric": "exact_match_choice",
+    "max_new_tokens": 1,
+    "sample_ids": "capability_publisher_seed_42_first_300",
+    "sample_count": 300,
+    "suite_source": "runs/real-baseline-data/mmlu.jsonl",
+    "unchanged": [
+      "model.id", "model.revision", "model.tokenizer_revision",
+      "evaluation suite and its published rows",
+      "evaluation.capability.mmlu.sample_ids",
+      "evaluation.capability.mmlu.scorer (first_token_logit)",
+      "evaluation.capability.mmlu.max_new_tokens (1)",
+      "evaluation.decoding block",
+      "MMLU prompt text (runner.real_adapters._mmlu_prompt)",
+      "MMLU candidate strings"
+    ]
+  },
+  "model_states": [
+    {"state": "baseline", "seed": null, "epoch": null,
+     "source": "huggingface snapshot at model.revision, resolved with local_files_only",
+     "integrity_source": "huggingface_revision_pin"},
+    {"state": "seed17-epoch1", "seed": 17, "epoch": 1,
+     "merged_dir": "runs/training-seed17-20260830-071553/checkpoints/epoch-1",
+     "expected_integrity_digest": "sha256:c1dad0683806a4243171abe1e9c4ec74851fac6429e36e2effdd2c81b93260f0",
+     "integrity_source": "no_runtime_digest_pre_issue_22"},
+    {"state": "seed17-epoch2", "seed": 17, "epoch": 2,
+     "merged_dir": "runs/training-seed17-20260830-071553/checkpoints/epoch-2",
+     "expected_integrity_digest": "sha256:97e31c66dbde143100ae0687a2b51225d5a7a055dca184cd46d80d8c4f3765d0",
+     "integrity_source": "no_runtime_digest_pre_issue_22"},
+    {"state": "seed17-epoch3", "seed": 17, "epoch": 3,
+     "merged_dir": "runs/training-seed17-20260830-071553/checkpoints/epoch-3",
+     "expected_integrity_digest": "sha256:857cb47fabe55ee6dc9817a92244821011e6e9126a4bd82ef1a5b4fc8f743140",
+     "integrity_source": "no_runtime_digest_pre_issue_22"},
+    {"state": "seed42-epoch1", "seed": 42, "epoch": 1,
+     "merged_dir": "runs/training-seed42-20260831-201248-1b487000/checkpoints/epoch-1",
+     "expected_integrity_digest": "sha256:e3822d876bf22983594129f251ca1a2a4edf8a1fa51bb3cc31a23eb74922737b",
+     "integrity_source": "recovery_reference",
+     "recovery_reference": "recovery/training-seed42-seq2048-epoch1.json"},
+    {"state": "seed42-epoch2", "seed": 42, "epoch": 2,
+     "merged_dir": "runs/training-seed42-20260831-201248-1b487000/checkpoints/epoch-2",
+     "expected_integrity_digest": "sha256:6d2e044fd0e480abd5d5c7bc81725b3a4661e5e1f97e9bdbbea0e370134f55bb",
+     "integrity_source": "recovery_reference",
+     "recovery_reference": "recovery/training-seed42-seq2048-epoch2.json"},
+    {"state": "seed42-epoch3", "seed": 42, "epoch": 3,
+     "merged_dir": "runs/training-seed42-20260831-201248-1b487000/checkpoints/epoch-3",
+     "expected_integrity_digest": "sha256:7536e0ec4c4d69453956206b4180e82a15bdae8714aafcb24818f527737bba97",
+     "integrity_source": "recovery_reference",
+     "recovery_reference": "recovery/training-seed42-seq2048-epoch3.json"},
+    {"state": "seed2026-epoch1", "seed": 2026, "epoch": 1,
+     "merged_dir": "runs/training-seed2026-20260901-112915-bf0809d1/checkpoints/epoch-1",
+     "expected_integrity_digest": "sha256:5c644a5d7e540b0a41b23ac6838e36398bfa9cb54ccdbe24eaadcdc0da1210f9",
+     "integrity_source": "recovery_reference",
+     "recovery_reference": "recovery/training-seed2026-seq2048-epoch1.json"},
+    {"state": "seed2026-epoch2", "seed": 2026, "epoch": 2,
+     "merged_dir": "runs/training-seed2026-20260901-112915-bf0809d1/checkpoints/epoch-2",
+     "expected_integrity_digest": "sha256:6e602525da930502b9982323ad3154755f08d63bd7bfe6c4e9d3706299266460",
+     "integrity_source": "recovery_reference",
+     "recovery_reference": "recovery/training-seed2026-seq2048-epoch2.json"},
+    {"state": "seed2026-epoch3", "seed": 2026, "epoch": 3,
+     "merged_dir": "runs/training-seed2026-20260901-112915-bf0809d1/checkpoints/epoch-3",
+     "expected_integrity_digest": "sha256:92ffe8c15b952f9581bc8b3e89f0368b5fdf9b4000fec77d4dff1712084fa2a0",
+     "integrity_source": "recovery_reference",
+     "recovery_reference": "recovery/training-seed2026-seq2048-epoch3.json"}
+  ],
+  "checkpoint_integrity_policy": {
+    "digest_function": "runner.training._directory_digest (sha256 over sorted relative-path + bytes of every file in the merged checkpoint directory)",
+    "before_gpu_time": "runner.diagnostic_chatmode_mmlu.verify_model_states recomputes _directory_digest for all nine merged directories and asserts equality with expected_integrity_digest. Any mismatch stops the diagnostic and reports; it never retrains.",
+    "recovery_reference": "For seeds 42 and 2026 the expected digest is additionally cross-checked against the integrity value recorded in the run-time recovery state (recovery/training-seed{42,2026}-seq2048-epoch{1,2,3}.json), captured by runner.training during the original evidence run.",
+    "seed_17_limitation": "Seed 17's evidence run predates the issue #22 resumable split-run seam and ran without --recovery-root, so no run-time merged-checkpoint digest was ever recorded for its three checkpoints. The expected_integrity_digest values above were first computed during this diagnostic (2026-09-02). The three merged directories are present, structurally valid standalone Hugging Face model directories (config.json + model.safetensors, 320 tensors) whose file modification times are unchanged since the 2026-08-30 training run, but their bit-identity to what the frozen Attempt-1 seed-17 evaluations scored cannot be independently verified. This limitation is disclosed and does not block the diagnostic (see docs/issue-30-chatmode-mmlu-diagnostic-decision.md)."
+  },
+  "analysis": {
+    "bootstrap_seed": 303030,
+    "bootstrap_replicates": 10000,
+    "interval": "95_percentile_paired_by_fixed_example_id",
+    "paired_test": "exact McNemar (two-sided binomial, p=0.5) over the fixed 300 example IDs",
+    "note": "This diagnostic uses its own bootstrap seed (303030), distinct from the frozen Attempt-1 analysis.bootstrap_seed (271828). It does not read, extend, or contribute to the frozen 10,000-replicate Attempt-1 bootstrap."
+  },
+  "reading_table": {
+    "flat_or_up_in_chat_mode": "The blind spot is scoring modality (log-likelihood versus generation), not the chat wrapper. The largest confound is eliminated rather than conceded.",
+    "collapses_in_chat_mode": "The fine-tune damaged the chat pathway specifically and the standard harness does not exercise it. 'Multiple-choice benchmarks are blind' is retired, replaced by a sharper claim about harness/interface mismatch."
+  },
+  "ambiguity_rule": {
+    "delta_threshold": 0.02,
+    "delta_threshold_source": "protocol/manifest.json selection.capability_gates.mmlu_max_decline",
+    "chance_level": 0.25,
+    "chance_band": 0.03,
+    "definition": "A model state's chat-mode result is ambiguous when |mean paired delta versus the Attempt-1 raw-mode result| < delta_threshold AND the 95% paired-bootstrap CI for that delta crosses zero (ci_low < 0 < ci_high). A state is a 'collapse' when the delta is <= -delta_threshold; otherwise it is 'flat_or_up'. Separately, a state's chat-mode result is 'near-chance' when its chat-mode aggregate is within chance_band of chance_level (0.25 for four choices), which indicates the first-token-logit ranking may have degenerated under the chat template's assistant-turn opener rather than measuring capability.",
+    "trigger": "If one or more of the ten model states is ambiguous OR near-chance, the robustness re-run is performed for all ten states.",
+    "robustness_rerun": {
+      "variant": "identical to the primary run except the MMLU candidate strings are the no-leading-space forms [\"A\", \"B\", \"C\", \"D\"]",
+      "rationale": "After a chat template's assistant-turn opener, a candidate string's leading space may tokenize differently than in raw-completion mode. The primary run keeps the identical Attempt-1 candidate strings for comparability; the re-run isolates the leading-space tokenization effect.",
+      "reporting": "Both the primary and no-leading-space tables are reported side by side."
+    }
+  },
+  "boundaries": [
+    "Diagnostic outputs are stored under diagnostics/ (outside runs/ and outside analysis/). They must never enter an Attempt-1 evidence bundle.",
+    "This diagnostic must not feed checkpoint selection. Both completed selection records finalized selected_checkpoint_digest: null and that is unchanged.",
+    "This diagnostic must not contribute to the frozen 10,000-replicate Attempt-1 bootstrap (analysis.bootstrap_seed = 271828).",
+    "The held-out InjecAgent benchmark is untouched. No HeldOutSealer is constructed and the restricted held-out root is never read.",
+    "GPU-hours consumed are recorded on this diagnostic's own resource line (diagnostics/chatmode-mmlu-<stamp>-resource.json, shaped as a runner.integrity_report non_scientific_runs row) and folded into the combined all-incurred-compute figure, not the scientific Attempt-1 totals."
+  ]
+}

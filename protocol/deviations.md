@@ -95,3 +95,23 @@ and the executed code agree on scoring modality and decoding scope.
 ## InjecAgent source pin
 
 `scripts/publish_suite.py` (`_publish_injecagent`) clones `https://github.com/uiuc-kang-lab/InjecAgent` with `git clone --depth 1` and no commit pin — every publish run takes whatever is at `HEAD` on the day it runs. Upstream does not fingerprint this dependency, so it is fingerprinted here instead: at protocol-freeze time (2026-08-29), `git ls-remote https://github.com/uiuc-kang-lab/InjecAgent HEAD` resolves to `f19c9f2c79a41046eb13c03c51a24c567a8ffa07`. The Phase 2 runner must record the actual cloned commit of `_injecagent_cache` inside every run's `manifest.yaml`/`environment.txt` (not assume this value), since InjecAgent's tool/task files feed the held-out benchmark's frozen candidate identifiers and any drift in that repository between baseline and trained runs would silently change what "the same held-out set" means.
+
+## Chat-mode MMLU diagnostic (issue #30)
+
+An authorized, separately versioned **diagnostic** protocol —
+`protocol/diagnostic/chatmode-mmlu-2026-09-02.json` (canonical digest
+`d21e34a834bcb26965e009b7baa0b34158007e6ddc6ae272e608e64111927731`) — re-scores
+MMLU with the chat template **enabled** (`evaluation.capability.mmlu.use_chat_template`
+`false` → `true`, the only changed value) on the frozen baseline and every
+finalized merged checkpoint, paired item by item against the Attempt-1
+raw-completion-mode result. It is authorized in writing in the issue #30 body and
+declares the frozen Attempt-1 baseline as its baseline (model identity, revision,
+suite, sample IDs, decoding block and scorer all unchanged).
+
+It is **not** a change to `phase1-2026-08-29`. Its outputs live under
+`diagnostics/` (never `runs/` or `analysis/`), never enter an Attempt-1 evidence
+bundle, never feed checkpoint selection, use their own bootstrap seed (303030,
+not the frozen 271828), and never touch the held-out InjecAgent benchmark. Its
+GPU-hours are recorded on its own resource line and folded into the combined
+all-incurred-compute figure only. Seed-17 checkpoint integrity note and the
+outcome are in `docs/issue-30-chatmode-mmlu-diagnostic-decision.md`.
