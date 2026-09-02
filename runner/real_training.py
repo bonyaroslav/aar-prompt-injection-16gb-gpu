@@ -8,6 +8,7 @@ import random
 import time
 from pathlib import Path
 
+from runner.ablation_training import run_ablation_epoch as _run_ablation_epoch
 from runner.fakes import OutOfMemoryError
 
 
@@ -15,6 +16,24 @@ _TARGET_MODULES = {
     "q": "q_proj", "k": "k_proj", "v": "v_proj", "o": "o_proj",
     "gate": "gate_proj", "up": "up_proj", "down": "down_proj",
 }
+
+
+def _deterministic_epoch_order(*, seed: int, epoch: int, example_count: int) -> list[int]:
+    order = list(range(example_count))
+    random.Random(seed + epoch).shuffle(order)
+    return order
+
+
+def _step_example_indexes(
+    order: list[int], *, step_index: int, micro_batch_size: int,
+    gradient_accumulation_steps: int,
+) -> list[int]:
+    """Reconstruct one optimizer step's examples without a persisted cursor."""
+    if step_index < 0 or micro_batch_size <= 0 or gradient_accumulation_steps <= 0:
+        raise ValueError("optimizer-step position arguments must be positive")
+    first = step_index * micro_batch_size * gradient_accumulation_steps
+    last = min(first + micro_batch_size * gradient_accumulation_steps, len(order))
+    return order[first:last]
 
 
 def encode_response_only(tokenizer, example: dict, max_length: int) -> dict:
@@ -160,6 +179,39 @@ class RealQLoRATrainerAdapter:
         self._adapters[fingerprint] = adapter_dir
         return fingerprint
 
+    def run_ablation_epoch(
+        self,
+        *,
+        protocol_version: str,
+        epoch: int,
+        sequence_length: int,
+        config: dict,
+        checkpoint_store,
+        total_steps: int,
+        seed: int,
+        checkpoint_interval: int = 120,
+    ):
+        """Run only the opt-in ablation path through the injected runtime seam."""
+        if protocol_version == "phase1-2026-08-29":
+            raise ValueError("mid-epoch recovery is ablation-only")
+        if config["method"] != "response_only_sft_qlora":
+            raise ValueError(f"unsupported training method: {config['method']!r}")
+        runtime = self.runtime.begin_ablation_epoch(
+            examples=self.training_examples,
+            seed=seed,
+            epoch=epoch,
+            sequence_length=sequence_length,
+            runtime_config=qlora_runtime_config(config),
+            smoke_max_steps=self.smoke_max_steps,
+        )
+        return _run_ablation_epoch(
+            protocol_version=protocol_version,
+            runtime=runtime,
+            total_steps=total_steps,
+            checkpoint_store=checkpoint_store,
+            checkpoint_interval=checkpoint_interval,
+        )
+
     def merge_checkpoint(self, fingerprint: str, output_dir: Path) -> None:
         try:
             adapter_dir = self._adapters[fingerprint]
@@ -188,6 +240,102 @@ class _TransformersQLoRARuntime:
         self.optimizer = None
         self.scheduler = None
         self.state_key = None
+
+    def capture_mid_epoch_state(self, step_index: int) -> dict:
+        """Return precisely the mutable state after a gradient-reset boundary."""
+        import torch
+        from peft import get_peft_model_state_dict
+
+        if self.model is None or self.optimizer is None or self.scheduler is None:
+            raise RuntimeError("training state is not initialized")
+        return {
+            "adapter_weights": get_peft_model_state_dict(self.model),
+            "optimizer_state": self.optimizer.state_dict(),
+            "scheduler_state": self.scheduler.state_dict(),
+            "cpu_rng_state": torch.get_rng_state(),
+            "cuda_rng_state": torch.cuda.get_rng_state_all(),
+            "step_index": step_index,
+        }
+
+    def restore_mid_epoch_state(self, state: dict) -> None:
+        """Restore mutable state before replaying the first unsaved step."""
+        import torch
+        from peft import set_peft_model_state_dict
+
+        if self.model is None or self.optimizer is None or self.scheduler is None:
+            raise RuntimeError("training state is not initialized")
+        set_peft_model_state_dict(self.model, state["adapter_weights"])
+        self.optimizer.load_state_dict(state["optimizer_state"])
+        self.scheduler.load_state_dict(state["scheduler_state"])
+        torch.set_rng_state(state["cpu_rng_state"])
+        if torch.cuda.is_available():
+            torch.cuda.set_rng_state_all(state["cuda_rng_state"])
+        self.optimizer.zero_grad(set_to_none=True)
+
+    def begin_ablation_epoch(
+        self, *, examples, seed, epoch, sequence_length, runtime_config, smoke_max_steps,
+    ):
+        """Initialize deterministic epoch inputs for the ablation-only step seam."""
+        import torch
+
+        try:
+            if self.state_key != (seed, sequence_length) or self.model is None:
+                self._release_training_state()
+                self._initialize(
+                    examples=examples, seed=seed, sequence_length=sequence_length,
+                    runtime_config=runtime_config, smoke_max_steps=smoke_max_steps,
+                )
+        except torch.OutOfMemoryError as exc:
+            self._release_training_state()
+            raise OutOfMemoryError(str(exc)) from exc
+        torch.manual_seed(seed + epoch)
+        order = _deterministic_epoch_order(
+            seed=seed, epoch=epoch, example_count=len(examples)
+        )
+        self._ablation_encoded_by_example = {
+            index: encode_response_only(self.tokenizer, examples[index], sequence_length)
+            for index in order
+        }
+        self._ablation_order = order
+        self._ablation_optimizer = runtime_config["optimizer"]
+        self._ablation_micro_batch = self._ablation_optimizer["micro_batch_size"]
+        self._ablation_accumulation = self._ablation_optimizer["gradient_accumulation_steps"]
+        self.optimizer.zero_grad(set_to_none=True)
+        return self
+
+    def optimizer_safe_step(self, step_index: int) -> None:
+        """Finish one complete accumulation group and clear gradients before return."""
+        import torch
+
+        if not hasattr(self, "_ablation_encoded_by_example"):
+            raise RuntimeError("ablation epoch has not been initialized")
+        indexes = _step_example_indexes(
+            self._ablation_order, step_index=step_index,
+            micro_batch_size=self._ablation_micro_batch,
+            gradient_accumulation_steps=self._ablation_accumulation,
+        )
+        if not indexes:
+            raise ValueError("optimizer step is beyond the deterministic epoch order")
+        try:
+            for first in range(0, len(indexes), self._ablation_micro_batch):
+                batch = [
+                    self._ablation_encoded_by_example[index]
+                    for index in indexes[first:first + self._ablation_micro_batch]
+                ]
+                input_ids, labels, attention = self._collate(batch)
+                loss = self.model(
+                    input_ids=input_ids, attention_mask=attention, labels=labels
+                ).loss
+                (loss / self._ablation_accumulation).backward()
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self._ablation_optimizer["max_grad_norm"]
+            )
+            self.optimizer.step()
+            self.scheduler.step()
+            self.optimizer.zero_grad(set_to_none=True)
+        except torch.OutOfMemoryError as exc:
+            self._release_training_state()
+            raise OutOfMemoryError(str(exc)) from exc
 
     def _resolve_snapshot(self, snapshot_download=None) -> str:
         local_path = Path(self.model_ref).expanduser()

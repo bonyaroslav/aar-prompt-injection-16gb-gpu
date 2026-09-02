@@ -1,15 +1,21 @@
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from runner.real_training import (
     RealQLoRATrainerAdapter,
     _TransformersQLoRARuntime,
+    _deterministic_epoch_order,
+    _step_example_indexes,
     encode_response_only,
     qlora_runtime_config,
 )
 from runner.fakes import OutOfMemoryError
+from runner.ablation_training import MidEpochCheckpointStore
+from runner.recovery import RecoveryWorkspace, StageSignature
 
 
 class CharacterTokenizer:
@@ -49,6 +55,44 @@ class RecordingRuntime:
         output_dir.mkdir(parents=True)
         (output_dir / "config.json").write_text('{"architectures":["Qwen"]}', encoding="utf-8")
         (output_dir / "model.safetensors").write_bytes(b"standalone merged weights")
+
+    def begin_ablation_epoch(self, *, examples, seed, epoch, sequence_length, runtime_config, smoke_max_steps):
+        self.ablation_begin = {
+            "examples": examples, "seed": seed, "epoch": epoch,
+            "sequence_length": sequence_length, "runtime_config": runtime_config,
+            "smoke_max_steps": smoke_max_steps,
+        }
+        self.ablation_steps = []
+        self.restored_state = None
+        return self
+
+    def optimizer_safe_step(self, step_index):
+        self.ablation_steps.append(step_index)
+
+    def capture_mid_epoch_state(self, step_index):
+        return {
+            "adapter_weights": {"adapter": b"recorded-adapter"},
+            "optimizer_state": {"step": step_index},
+            "scheduler_state": {"last_epoch": step_index},
+            "cpu_rng_state": (3, (1, 2, 3), None),
+            "cuda_rng_state": [b"recorded-cuda-rng"],
+            "step_index": step_index,
+        }
+
+    def restore_mid_epoch_state(self, state):
+        self.restored_state = state
+
+
+class InterruptingRecordingRuntime(RecordingRuntime):
+    def __init__(self, root, *, interrupt_at=None):
+        super().__init__(root)
+        self.interrupt_at = interrupt_at
+        self.executed_steps = []
+
+    def optimizer_safe_step(self, step_index):
+        if step_index == self.interrupt_at:
+            raise RuntimeError(f"injected interruption at optimizer step {step_index}")
+        self.executed_steps.append(step_index)
 
 
 class ResponseOnlyEncodingTests(unittest.TestCase):
@@ -152,14 +196,121 @@ class RuntimeOOMTranslationTests(unittest.TestCase):
             self.assertEqual(resolved, str(snapshot.resolve()))
 
     def test_initialization_cuda_oom_is_translated_for_runner_fallback(self):
+        class FakeCuda:
+            @staticmethod
+            def is_available():
+                return False
+
+        class FakeTorch:
+            class OutOfMemoryError(RuntimeError):
+                pass
+
+            cuda = FakeCuda()
+
         with tempfile.TemporaryDirectory() as tmp:
             runtime = InitializationOOMRuntime(tmp)
-            with self.assertRaisesRegex(OutOfMemoryError, "initialization OOM"):
-                runtime.train_epoch(
-                    examples=[{"messages": []}], seed=17, epoch=1, sequence_length=2048,
-                    runtime_config={"optimizer": {}}, smoke_max_steps=1,
-                )
+            with patch.dict(sys.modules, {"torch": FakeTorch}):
+                with self.assertRaisesRegex(OutOfMemoryError, "initialization OOM"):
+                    runtime.train_epoch(
+                        examples=[{"messages": []}], seed=17, epoch=1, sequence_length=2048,
+                        runtime_config={"optimizer": {}}, smoke_max_steps=1,
+                    )
             self.assertTrue(runtime.released)
+
+    def test_mid_epoch_state_captures_and_restores_adapter_optimizer_scheduler_and_rng(self):
+        """Dropping any mutable field would make a restarted epoch diverge."""
+        class Optimizer:
+            def __init__(self):
+                self.loaded = None
+                self.zeroed = False
+
+            def state_dict(self):
+                return {"moment": b"optimizer-moment"}
+
+            def load_state_dict(self, state):
+                self.loaded = state
+
+            def zero_grad(self, *, set_to_none):
+                self.zeroed = set_to_none
+
+        class Scheduler:
+            def __init__(self):
+                self.loaded = None
+
+            def state_dict(self):
+                return {"last_epoch": 7}
+
+            def load_state_dict(self, state):
+                self.loaded = state
+
+        class Cuda:
+            def __init__(self):
+                self.restored = None
+
+            def is_available(self):
+                return True
+
+            def get_rng_state_all(self):
+                return [b"cuda-rng"]
+
+            def set_rng_state_all(self, state):
+                self.restored = state
+
+        class Torch:
+            def __init__(self):
+                self.cuda = Cuda()
+                self.cpu_rng_restored = None
+
+            def get_rng_state(self):
+                return b"cpu-rng"
+
+            def set_rng_state(self, state):
+                self.cpu_rng_restored = state
+
+        torch = Torch()
+        peft = type("Peft", (), {})()
+        peft.get_peft_model_state_dict = lambda model: {"lora.weight": b"adapter"}
+        restored_adapters = []
+        peft.set_peft_model_state_dict = lambda model, state: restored_adapters.append(state)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            runtime = _TransformersQLoRARuntime("model", "revision", Path(temporary_directory))
+            runtime.model = object()
+            runtime.optimizer = Optimizer()
+            runtime.scheduler = Scheduler()
+
+            with patch.dict(sys.modules, {"torch": torch, "peft": peft}):
+                state = runtime.capture_mid_epoch_state(step_index=7)
+                runtime.restore_mid_epoch_state(state)
+
+            loaded_optimizer = runtime.optimizer.loaded
+            loaded_scheduler = runtime.scheduler.loaded
+            optimizer_zeroed = runtime.optimizer.zeroed
+
+        self.assertEqual(state, {
+            "adapter_weights": {"lora.weight": b"adapter"},
+            "optimizer_state": {"moment": b"optimizer-moment"},
+            "scheduler_state": {"last_epoch": 7},
+            "cpu_rng_state": b"cpu-rng",
+            "cuda_rng_state": [b"cuda-rng"],
+            "step_index": 7,
+        })
+        self.assertEqual(restored_adapters, [{"lora.weight": b"adapter"}])
+        self.assertEqual(loaded_optimizer, {"moment": b"optimizer-moment"})
+        self.assertEqual(loaded_scheduler, {"last_epoch": 7})
+        self.assertEqual(torch.cpu_rng_restored, b"cpu-rng")
+        self.assertEqual(torch.cuda.restored, [b"cuda-rng"])
+        self.assertTrue(optimizer_zeroed)
+
+    def test_step_index_reconstructs_the_seeded_epoch_data_position(self):
+        """Persisting a data cursor instead would add mutable recovery state."""
+        order = _deterministic_epoch_order(seed=17, epoch=2, example_count=5)
+
+        self.assertEqual(order, [1, 3, 2, 4, 0])
+        self.assertEqual(
+            _step_example_indexes(order, step_index=1, micro_batch_size=1,
+                                  gradient_accumulation_steps=2),
+            [2, 4],
+        )
 
 
 class RealQLoRATrainerAdapterTests(unittest.TestCase):
@@ -243,6 +394,114 @@ class RealQLoRATrainerAdapterTests(unittest.TestCase):
         self.assertEqual(trainer.environment_lines, [
             "injecagent_source_commit=f19c9f2c79a41046eb13c03c51a24c567a8ffa07"
         ])
+
+    def test_ablation_bridge_uses_injected_runtime_and_reports_save_measurements(self):
+        """Bypassing the runtime seam would make the CPU recovery path untestable."""
+        recovery_root = Path(self.tmp.name) / "recovery"
+        workspace = RecoveryWorkspace(recovery_root, Path(self.tmp.name) / "evidence")
+        signature = StageSignature.create(
+            manifest_digest="sha256:ablation-manifest", protocol_version="ablation-v1",
+            upstream_commit="a" * 40, upstream_tree="b" * 40, model_revision="c" * 40,
+            seed=17, stage="training", epoch=1, checkpoint_digest="sha256:base",
+            effective_evaluation_config={"sequence_length": 2048}, expected_example_ids=[],
+        )
+        store = MidEpochCheckpointStore(workspace, "adapter-bridge", signature)
+        trainer = RealQLoRATrainerAdapter(
+            "m", "r", self.examples, self.tmp.name, runtime=self.runtime,
+        )
+
+        result = trainer.run_ablation_epoch(
+            protocol_version="ablation-v1", seed=17, epoch=1, sequence_length=2048,
+            config=self.training, checkpoint_store=store, total_steps=2,
+            checkpoint_interval=2,
+        )
+
+        self.assertEqual(result.checkpoint_steps, [2])
+        self.assertEqual(self.runtime.ablation_begin["seed"], 17)
+        self.assertEqual(self.runtime.ablation_steps, [0, 1])
+        self.assertEqual(store.load()["step_index"], 2)
+        self.assertGreater(result.checkpoints[0].byte_count, 0)
+
+    def test_ablation_bridge_requires_an_explicit_seed(self):
+        """A default seed would silently reconstruct a different epoch order."""
+        trainer = RealQLoRATrainerAdapter(
+            "m", "r", self.examples, self.tmp.name, runtime=self.runtime,
+        )
+        workspace = RecoveryWorkspace(
+            Path(self.tmp.name) / "recovery", Path(self.tmp.name) / "evidence"
+        )
+        store = MidEpochCheckpointStore(workspace, "explicit-seed", StageSignature.create(
+            manifest_digest="sha256:ablation-manifest", protocol_version="ablation-v1",
+            upstream_commit="a" * 40, upstream_tree="b" * 40, model_revision="c" * 40,
+            seed=17, stage="training", epoch=1, checkpoint_digest="sha256:base",
+            effective_evaluation_config={"sequence_length": 2048}, expected_example_ids=[],
+        ))
+
+        with self.assertRaises(TypeError):
+            trainer.run_ablation_epoch(
+                protocol_version="ablation-v1", epoch=1, sequence_length=2048,
+                config=self.training, checkpoint_store=store, total_steps=1,
+            )
+
+    def test_ablation_bridge_rejects_attempt_one_before_runtime_initialization(self):
+        """Initializing Attempt-1 here would itself change frozen computation state."""
+        workspace = RecoveryWorkspace(
+            Path(self.tmp.name) / "recovery", Path(self.tmp.name) / "evidence"
+        )
+        store = MidEpochCheckpointStore(workspace, "attempt-one-bridge", StageSignature.create(
+            manifest_digest="sha256:manifest", protocol_version="phase1-2026-08-29",
+            upstream_commit="a" * 40, upstream_tree="b" * 40, model_revision="c" * 40,
+            seed=17, stage="training", epoch=1, checkpoint_digest="sha256:base",
+            effective_evaluation_config={}, expected_example_ids=[],
+        ))
+        trainer = RealQLoRATrainerAdapter(
+            "m", "r", self.examples, self.tmp.name, runtime=self.runtime,
+        )
+
+        with self.assertRaisesRegex(ValueError, "ablation-only"):
+            trainer.run_ablation_epoch(
+                protocol_version="phase1-2026-08-29", seed=17, epoch=1,
+                sequence_length=2048, config=self.training, checkpoint_store=store,
+                total_steps=1,
+            )
+
+        self.assertFalse(hasattr(self.runtime, "ablation_begin"))
+
+    def test_ablation_bridge_resumes_each_step_once_through_injected_runtime(self):
+        """Restarting at an off-by-one step would repeat or skip the trainer seam."""
+        workspace = RecoveryWorkspace(
+            Path(self.tmp.name) / "recovery", Path(self.tmp.name) / "evidence"
+        )
+        signature = StageSignature.create(
+            manifest_digest="sha256:ablation-manifest", protocol_version="ablation-v1",
+            upstream_commit="a" * 40, upstream_tree="b" * 40, model_revision="c" * 40,
+            seed=17, stage="training", epoch=1, checkpoint_digest="sha256:base",
+            effective_evaluation_config={"sequence_length": 2048}, expected_example_ids=[],
+        )
+        store = MidEpochCheckpointStore(workspace, "exact-adapter-resume", signature)
+        interrupted_runtime = InterruptingRecordingRuntime(self.tmp.name, interrupt_at=2)
+        interrupted = RealQLoRATrainerAdapter(
+            "m", "r", self.examples, self.tmp.name, runtime=interrupted_runtime,
+        )
+        with self.assertRaisesRegex(RuntimeError, "optimizer step 2"):
+            interrupted.run_ablation_epoch(
+                protocol_version="ablation-v1", seed=17, epoch=1, sequence_length=2048,
+                config=self.training, checkpoint_store=store, total_steps=4,
+                checkpoint_interval=1,
+            )
+
+        resumed_runtime = InterruptingRecordingRuntime(self.tmp.name)
+        resumed = RealQLoRATrainerAdapter(
+            "m", "r", self.examples, self.tmp.name, runtime=resumed_runtime,
+        ).run_ablation_epoch(
+            protocol_version="ablation-v1", seed=17, epoch=1, sequence_length=2048,
+            config=self.training, checkpoint_store=store, total_steps=4,
+            checkpoint_interval=1,
+        )
+
+        self.assertEqual(interrupted_runtime.executed_steps + resumed_runtime.executed_steps, [0, 1, 2, 3])
+        self.assertTrue(resumed.mid_epoch_resume_fired)
+        self.assertEqual(resumed_runtime.restored_state["step_index"], 2)
 
 
 if __name__ == "__main__":
