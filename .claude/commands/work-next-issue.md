@@ -20,13 +20,13 @@ If any closed issue's own blockers aren't all closed, or two issues' states conf
 ## 3. Implement
 
 - Read the full issue (What to build / Acceptance criteria / Blocked by).
-- `RESEARCH_SPEC.md` and `protocol/manifest.json` are authoritative. Never silently deviate from a frozen protocol value. Check `docs/adr/*.md` before re-deciding anything already decided there.
+- `RESEARCH_PLAN.md` defines the durable scope and protocol narrative; `protocol/manifest.json` contains frozen protocol values. Never silently deviate from a frozen protocol value. Check `docs/adr/*.md` before re-deciding anything already decided there.
 - Use TDD where the acceptance criteria describe testable behavior. Before considering the ticket done, run the existing suite (`python -m unittest discover -s tests -q`) plus whatever tests the ticket added.
 
 ## 4. Stop conditions — do NOT close the issue if any apply
 
 - An acceptance criterion needs a decision only the user can make: new scope, a genuine protocol deviation, a missing credential/token, a destructive or irreversible action, real money or a paid API.
-- Finishing would violate a capability gate, resource limit, or held-out-sealing rule from `RESEARCH_SPEC.md`.
+- Finishing would violate a capability gate, resource limit, or held-out-sealing rule from `RESEARCH_PLAN.md` or `protocol/manifest.json`.
 - Required hardware/environment isn't reachable (e.g. a real-GPU ticket but WSL/CUDA isn't up).
 - Tests fail and the fix isn't obvious and safe.
 
@@ -35,7 +35,7 @@ If any apply: commit only safe, clearly-marked-WIP partial progress if there is 
 ## 5. On success
 
 - Run the full test suite once more.
-- Update `RESEARCH_SPEC.md`'s "Status and Guardrails" section (a line or two, not a rewrite) so a fresh session sees current phase/issue state without reading this conversation.
+- Update the opening **Status:** paragraph in `RESEARCH_PLAN.md` (a line or two, not a rewrite) so a fresh session sees current phase/issue state without reading this conversation.
 - Commit with a message ending `Closes #<N>` plus the repo's usual `Co-Authored-By` trailer. Do not push unless asked.
 - `gh issue close <N> --comment "<what shipped, and the commit it shipped in>"`.
 - Report: which issue closed, what changed, and what's next in the queue.
