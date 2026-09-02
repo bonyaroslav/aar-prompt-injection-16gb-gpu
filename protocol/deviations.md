@@ -24,6 +24,19 @@ Transformers resolved to `5.16.1`, which satisfies upstream's open-ended `>=4.51
 
 None of these observations changes any resolved model, dataset, prompt, decoding, scorer, or training-hyperparameter value in `manifest.json`.
 
+## Manifest line endings and digest portability
+
+The frozen manifest has two deliberately distinct digest identities.  The
+canonical-JSON content digest is the checkout-invariant publication identity;
+the raw-file digest in `protocol/manifest.sha256` is the byte-integrity value
+used by `protocol.validate_manifest.sha256` and by recovery `StageSignature`
+values.  Before `.gitattributes` pinned `protocol/**` to LF, a default Windows
+checkout rewrote the raw bytes to CRLF and produced a false integrity mismatch.
+That also made a recovery state written under one line-ending convention appear
+incompatible under another.  The recorded raw digest and all finalized evidence
+bundles remain unchanged; LF checkout policy now keeps future raw-file and
+stage-signature identities portable.
+
 ## Canonical real-GPU qualification
 
 The canonical issue-9 qualification is the run stamped `20260829-191237`. Its public

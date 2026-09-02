@@ -31,7 +31,7 @@ this issue does not start it.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Finalized selection identity | PASS — protocol `phase1-2026-08-29`, manifest digest `399cf1572ccf580f4741429230cb556840a7e1c9fdb514ba053c9a6f16ce7f20`, seed-17 candidates for epochs 1–3, `finalized: true`, selected checkpoint and epoch both `null` | `runs/selection-seed17-20260830-071553/selection_record.json` |
+| Finalized selection identity | PASS — protocol `phase1-2026-08-29`, canonical-JSON content digest `399cf1572ccf580f4741429230cb556840a7e1c9fdb514ba053c9a6f16ce7f20`, seed-17 candidates for epochs 1–3, `finalized: true`, selected checkpoint and epoch both `null` | `runs/selection-seed17-20260830-071553/selection_record.json` |
 | Selection-record checksum | PASS — SHA-256 `46dfe6eab879994e8b248a7a5f5c80d35681a7e610aa2ae70c501b1f72e2e5f8` | `runner.selection.verify_selection_record` against the finalized record; prior durable index: `analysis/seed17-outcomes-summary.md` |
 | Training bundle checksum topology | PASS — every required bundle file matches `checksums.sha256` | `runs/training-seed17-20260830-071553/`; `runner.bundle.verify_bundle` |
 | Epoch-1 evaluation checksum topology | PASS — every required bundle file matches `checksums.sha256` | `runs/eval-seed17-epoch1-20260830-071553/`; `runner.bundle.verify_bundle` |

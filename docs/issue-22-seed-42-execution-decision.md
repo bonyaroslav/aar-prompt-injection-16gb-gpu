@@ -2,7 +2,7 @@
 
 **Issue:** [#22](https://github.com/bonyaroslav/aar-prompt-injection-16gb-gpu/issues/22)
 **Decision date:** 2026-09-01
-**Protocol:** `phase1-2026-08-29` (`protocol/manifest.json`, manifest digest
+**Protocol:** `phase1-2026-08-29` (`protocol/manifest.json`, canonical-JSON content digest
 `399cf1572ccf580f4741429230cb556840a7e1c9fdb514ba053c9a6f16ce7f20`)
 **Scope:** wires the resumable split-run seam (issue #15) into the real seed
 orchestration and executes seed 42 under it. No frozen protocol, dataset,

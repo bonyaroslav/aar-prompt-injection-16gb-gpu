@@ -7,7 +7,7 @@
 
 This handover covers the frozen Phase-1 manifest, the frozen real baseline, and finalized visible/capability evidence for seeds 17 and 42. It does not use raw held-out InjecAgent data, recovery state, secrets, credentials, model caches, or smoke outputs as scientific evidence.
 
-`protocol/manifest.json` is frozen at SHA-256 `296e093bb1a6fc72f6e4cdf6ed3de5cde77a9e3da90df73db4538a2a98e6f4ac`, matching `protocol/manifest.sha256`. It specifies seeds 17, 42, and 2026; a 10,000-replicate seed-271828 paired bootstrap over fixed visible-example IDs; capability-gated checkpoint selection; and held-out reveal only for a finalized selected checkpoint.
+`protocol/manifest.json` has canonical-JSON content digest `399cf1572ccf580f4741429230cb556840a7e1c9fdb514ba053c9a6f16ce7f20`, the checkout-invariant identity used for publication and selection provenance. Its separate raw-file SHA-256 is `296e093bb1a6fc72f6e4cdf6ed3de5cde77a9e3da90df73db4538a2a98e6f4ac`, matching `protocol/manifest.sha256` and used for byte-integrity and stage signatures. It specifies seeds 17, 42, and 2026; a 10,000-replicate seed-271828 paired bootstrap over fixed visible-example IDs; capability-gated checkpoint selection; and held-out reveal only for a finalized selected checkpoint.
 
 ## Work completed
 

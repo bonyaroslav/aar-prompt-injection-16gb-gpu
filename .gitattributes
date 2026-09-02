@@ -1,0 +1,8 @@
+# The frozen protocol is byte-checked and its raw manifest digest is part of
+# recovery-stage signatures.  These files must not vary with checkout settings.
+.gitattributes text eol=lf
+protocol/** text eol=lf
+
+# Human-readable provenance records include the published digest identities.
+docs/** text eol=lf
+RESEARCH_PLAN.md text eol=lf

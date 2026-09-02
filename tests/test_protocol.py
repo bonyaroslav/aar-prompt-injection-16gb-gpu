@@ -1,11 +1,32 @@
-import json, tempfile, unittest
+import json, subprocess, tempfile, unittest
 from pathlib import Path
 from protocol.validate_manifest import load
 from protocol.heldout import HeldOutSealer
 
 MANIFEST = Path(__file__).parents[1] / "protocol" / "manifest.json"
+REPO_ROOT = MANIFEST.parents[1]
 
 class ProtocolTests(unittest.TestCase):
+    def test_manifest_checkout_policy_forces_lf(self):
+        result = subprocess.run(
+            [
+                "git", "check-attr", "eol", "--",
+                "protocol/manifest.json", "protocol/manifest.sha256",
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "protocol/manifest.json: eol: lf",
+                "protocol/manifest.sha256: eol: lf",
+            ],
+        )
+
     def test_frozen_manifest_validates_offline(self):
         self.assertEqual(load(MANIFEST)["protocol_version"], "phase1-2026-08-29")
 
