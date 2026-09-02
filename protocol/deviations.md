@@ -61,6 +61,37 @@ integrity manifest also records upstream OPI's benchmark-specific behavior: `n=1
 publishes one row for each of its three injected tasks (three rows total), while the
 qualification adapter deliberately consumes one row.
 
+## Manifest/implementation drifts (issue #29)
+
+Three gaps between the frozen `manifest.json` and what the code actually does.
+They are recorded here (and in the issue #29 reproducibility disclosure) rather
+than silently reconciled, because the manifest is frozen and the evidence was
+produced against the code as it ran:
+
+1. **The manifest names a multiple-choice scorer the pinned upstream does not
+   use.** `evaluation.capability.mmlu.scorer = first_token_logit` with
+   `max_new_tokens = 1`; the pinned upstream (`aar/benchmarks/mmlu/benchmark.py`,
+   fingerprinted in `protocol/provenance.json`) scores MMLU by generated text,
+   not a first-token logit ranking. This study's runner honours the manifest
+   value, so MMLU alone is evaluated in a different modality from every other
+   benchmark (see issue #28's modality-grouped primary table).
+2. **A declared free-form decoding treatment is read by no code.**
+   `decoding.freeform_treatment` (`no_repeat_ngram = 4`, `auto_ceiling = 1024`,
+   `scope = "free-form judge-scored only"`) presupposes a judge-scored free-form
+   path. This study uses only rule/logprob scorers (no paid or local judge), so
+   nothing consults `freeform_treatment`; every benchmark uses the top-level
+   `decoding` block.
+3. **Decoding is applied once globally, not per benchmark as upstream
+   documents.** Upstream resolves decoding parameters per benchmark; this
+   study's runner applies the single top-level `decoding` block to every
+   benchmark path. The per-benchmark `max_new_tokens` values in the manifest are
+   still honoured, but the sampling parameters (`strategy`, `temperature`,
+   `top_p`, `seed`, `no_repeat_ngram`) are global.
+
+None of these changed a resolved model, dataset, prompt, or training
+hyperparameter; they are disclosed so a reader does not assume the manifest text
+and the executed code agree on scoring modality and decoding scope.
+
 ## InjecAgent source pin
 
 `scripts/publish_suite.py` (`_publish_injecagent`) clones `https://github.com/uiuc-kang-lab/InjecAgent` with `git clone --depth 1` and no commit pin — every publish run takes whatever is at `HEAD` on the day it runs. Upstream does not fingerprint this dependency, so it is fingerprinted here instead: at protocol-freeze time (2026-08-29), `git ls-remote https://github.com/uiuc-kang-lab/InjecAgent HEAD` resolves to `f19c9f2c79a41046eb13c03c51a24c567a8ffa07`. The Phase 2 runner must record the actual cloned commit of `_injecagent_cache` inside every run's `manifest.yaml`/`environment.txt` (not assume this value), since InjecAgent's tool/task files feed the held-out benchmark's frozen candidate identifiers and any drift in that repository between baseline and trained runs would silently change what "the same held-out set" means.
