@@ -6,3 +6,7 @@ protocol/** text eol=lf
 # Human-readable provenance records include the published digest identities.
 docs/** text eol=lf
 RESEARCH_PLAN.md text eol=lf
+
+# Analysis records and config are digested into the frozen input manifest
+# (issue #27), so their bytes must not vary with checkout settings.
+analysis/** text eol=lf

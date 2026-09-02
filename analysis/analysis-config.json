@@ -1,0 +1,8 @@
+{
+  "analysis_version": "phase1-analysis-2026-09",
+  "governance_records": {
+    "17": "docs/issue-21-null-selection-continuation-decision.md",
+    "42": "docs/issue-22-seed-42-execution-decision.md",
+    "2026": "docs/issue-23-seed-2026-execution-decision.md"
+  }
+}
