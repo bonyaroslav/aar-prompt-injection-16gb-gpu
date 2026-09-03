@@ -250,6 +250,49 @@ class BuildDatasetTests(unittest.TestCase):
             by_category[example.category].append(example.messages[-1]["content"])
         self.assertEqual(set(by_category["clean_control"]) & set(by_category["ambiguous_boundary"]), set())
 
+    def test_explicit_default_oversample_matches_existing_build_byte_for_byte(self):
+        targets = {"prompt_injection": 2, "clean_control": 3, "ambiguous_boundary": 2, "refusal_calibration": 2}
+        inputs = {
+            "injection_raw_rows": self._injection_rows(4),
+            "dolly_rows": self._dolly_rows(30),
+            "exclusion_exact_keys": set(),
+            "exclusion_near_keys": set(),
+            "token_cap": TOKEN_CAP,
+            "targets": targets,
+        }
+
+        legacy = build_dataset(**inputs)
+        explicit = build_dataset(**inputs, dolly_oversample_factor=3)
+
+        self.assertEqual(
+            [example.to_record() for example in explicit["examples"]],
+            [example.to_record() for example in legacy["examples"]],
+        )
+        self.assertEqual(explicit["report"], legacy["report"])
+
+    def test_clean_only_ablation_fixture_has_complete_categories_and_no_injection(self):
+        targets = {
+            "prompt_injection": 0,
+            "clean_control": 3500,
+            "ambiguous_boundary": 1000,
+            "refusal_calibration": 500,
+        }
+
+        result = build_dataset(
+            injection_raw_rows=[],
+            dolly_rows=self._dolly_rows(12000),
+            exclusion_exact_keys=set(),
+            exclusion_near_keys=set(),
+            token_cap=TOKEN_CAP,
+            targets=targets,
+            dolly_oversample_factor=1,
+        )
+
+        self.assertEqual(result["report"]["counts"], targets)
+        self.assertEqual(result["report"]["total"], 5000)
+        self.assertEqual(result["report"]["shortfalls"], {})
+        self.assertFalse(any(example.category == "prompt_injection" for example in result["examples"]))
+
     def test_shortfall_is_recorded_when_a_pool_is_exhausted(self):
         targets = {"prompt_injection": 0, "clean_control": 0, "ambiguous_boundary": 0, "refusal_calibration": 5000}
         result = build_dataset(

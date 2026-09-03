@@ -1,0 +1,67 @@
+{
+  "schema": "aar-prompt-injection-ablation/v1",
+  "ablation_version": "ablation-corpus-2026-09-02",
+  "purpose": "Measure whether the 2,000 prompt-injection/refusal examples, rather than short-answer SFT generally, drive the Attempt-1 capability collapse. The only manipulated variable is the training corpus.",
+  "downstream_of": {
+    "protocol_version": "phase1-2026-08-29",
+    "canonical_manifest_digest": "399cf1572ccf580f4741429230cb556840a7e1c9fdb514ba053c9a6f16ce7f20",
+    "raw_manifest_sha256": "296e093bb1a6fc72f6e4cdf6ed3de5cde77a9e3da90df73db4538a2a98e6f4ac",
+    "relationship": "This ablation is explicitly downstream of finalized Attempt-1 evidence. The loader fails closed if the frozen manifest digest changes."
+  },
+  "authorization": {
+    "issue": "https://github.com/bonyaroslav/aar-prompt-injection-16gb-gpu/issues/31",
+    "statement": "The issue #31 body authorizes this separately versioned ablation in writing. It is an authorized deviation being executed, not a protocol decision being made."
+  },
+  "baseline": {
+    "reuse": "frozen Attempt-1 baseline",
+    "bundle": "runs/real-baseline-20260829-205020",
+    "metrics": "runs/real-baseline-20260829-205020/metrics.json",
+    "justification": "Model identity, model revision, evaluation suite, fixed example identifiers, decoding block and scorers are unchanged. The corpus is the only manipulated variable, so no fresh baseline evaluation is run."
+  },
+  "training": {
+    "seed": 42,
+    "epochs": 3,
+    "unchanged": [
+      "model and tokenizer revision", "QLoRA hyperparameters", "trainer code", "adapter initialization ordering",
+      "optimizer and schedule", "max sequence length", "visible evaluation suites and fixed identifiers"
+    ]
+  },
+  "corpus": {
+    "targets": {
+      "prompt_injection": 0,
+      "clean_control": 3500,
+      "ambiguous_boundary": 1000,
+      "refusal_calibration": 500
+    },
+    "dolly_oversample_factor": 2,
+    "construction_token_cap": 1536,
+    "sources": ["databricks/databricks-dolly-15k", "deepset/prompt-injections", "Lakera/gandalf_ignore_instructions"],
+    "source_cache": "Re-fetched and verified against Attempt-1 on 2026-09-02; every source is available under HF_HUB_OFFLINE=1.",
+    "acceptance": "Exactly 5,000 examples, no category shortfall, and zero prompt_injection examples. The 1,536-token construction filter is deliberately below the frozen 2,048-token trainer limit so every retained response remains trainable without changing trainer truncation behavior. Report the raw source pool sizes and canonical Dolly-row digest."
+  },
+  "recovery": {
+    "mode": "runner.ablation_training mid-epoch optimizer-safe checkpoints",
+    "checkpoint_interval_steps": 120,
+    "workspace": "external to ablation evidence root",
+    "acceptance": "Deliberately terminate epoch 1 after a durable checkpoint, rerun the identical command, and retain mid_epoch_resume_fired plus save measurements in the attempt ledger."
+  },
+  "analysis": {
+    "bootstrap_seed": 313131,
+    "bootstrap_replicates": 10000,
+    "comparison": "paired per-benchmark comparison against completed seed 42; distinct from frozen Attempt-1 bootstrap seed 271828"
+  },
+  "resources": {
+    "prior_scientific_gpu_hours": 47.34,
+    "projected_gpu_hours": 12.74,
+    "cumulative_gpu_hour_cap": 72.0,
+    "peak_vram_soft_cap_gib": 15.5,
+    "peak_vram_physical_cap_gib": 16.0
+  },
+  "boundaries": [
+    "Outputs are stored under ablation/ outside runs/ and analysis/ and never enter an Attempt-1 evidence bundle.",
+    "The ablation never feeds checkpoint selection and never contributes to the frozen Attempt-1 bootstrap.",
+    "The held-out InjecAgent benchmark is untouched; no held-out sealer or restricted root is constructed or read.",
+    "GPU-hours are recorded on the ablation protocol resource line and included only in combined all-incurred compute accounting.",
+    "The ablation determines whether the injection block is responsible, not whether injection semantics or repeated refusals cause any effect."
+  ]
+}

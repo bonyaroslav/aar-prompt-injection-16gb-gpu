@@ -82,6 +82,15 @@ class RecordingRuntime:
     def restore_mid_epoch_state(self, state):
         self.restored_state = state
 
+    def save_ablation_adapter(self, *, seed, epoch, sequence_length):
+        adapter_dir = self.root / f"ablation-adapter-{epoch}"
+        adapter_dir.mkdir()
+        (adapter_dir / "adapter_model.safetensors").write_bytes(
+            f"ablation-epoch={epoch};seed={seed};seq={sequence_length}".encode()
+        )
+        (adapter_dir / "adapter_config.json").write_text('{"format":"peft"}', encoding="utf-8")
+        return adapter_dir
+
 
 class InterruptingRecordingRuntime(RecordingRuntime):
     def __init__(self, root, *, interrupt_at=None):
@@ -421,6 +430,30 @@ class RealQLoRATrainerAdapterTests(unittest.TestCase):
         self.assertEqual(self.runtime.ablation_steps, [0, 1])
         self.assertEqual(store.load()["step_index"], 2)
         self.assertGreater(result.checkpoints[0].byte_count, 0)
+
+    def test_ablation_checkpoint_is_registered_for_existing_merge_path(self):
+        workspace = RecoveryWorkspace(
+            Path(self.tmp.name) / "recovery", Path(self.tmp.name) / "evidence"
+        )
+        signature = StageSignature.create(
+            manifest_digest="sha256:ablation-manifest", protocol_version="ablation-v1",
+            upstream_commit="a" * 40, upstream_tree="b" * 40, model_revision="c" * 40,
+            seed=42, stage="training", epoch=1, checkpoint_digest="sha256:base",
+            effective_evaluation_config={"sequence_length": 2048}, expected_example_ids=[],
+        )
+        trainer = RealQLoRATrainerAdapter("m", "r", self.examples, self.tmp.name, runtime=self.runtime)
+        trainer.run_ablation_epoch(
+            protocol_version="ablation-v1", seed=42, epoch=1, sequence_length=2048,
+            config=self.training, checkpoint_store=MidEpochCheckpointStore(workspace, "save-bridge", signature),
+            total_steps=1, checkpoint_interval=1,
+        )
+
+        fingerprint = trainer.save_ablation_checkpoint(seed=42, epoch=1, sequence_length=2048)
+        merged = Path(self.tmp.name) / "merged-ablation"
+        trainer.merge_checkpoint(fingerprint, merged)
+
+        self.assertTrue((merged / "config.json").is_file())
+        self.assertTrue(self.runtime.merge_calls)
 
     def test_ablation_bridge_requires_an_explicit_seed(self):
         """A default seed would silently reconstruct a different epoch order."""

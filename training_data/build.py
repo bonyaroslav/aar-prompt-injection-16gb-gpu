@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import random
+import hashlib
 from pathlib import Path
 
 from training_data.dedup import Deduplicator, pool_keys
@@ -40,13 +41,16 @@ _DOLLY_OVERSAMPLE_FACTOR = 3
 
 
 def build_dataset(*, injection_raw_rows, dolly_rows, exclusion_exact_keys, exclusion_near_keys,
-                   token_cap: int, targets: dict[str, int] | None = None) -> dict:
+                   token_cap: int, targets: dict[str, int] | None = None,
+                   dolly_oversample_factor: int = _DOLLY_OVERSAMPLE_FACTOR) -> dict:
     targets = dict(targets or TARGET_COUNTS)
+    if not isinstance(dolly_oversample_factor, int) or dolly_oversample_factor <= 0:
+        raise ValueError("dolly_oversample_factor must be a positive integer")
     dedup = Deduplicator(exclude_exact=exclusion_exact_keys, exclude_near=exclusion_near_keys)
 
     shuffled_dolly = list(dolly_rows)
     random.Random(_DOLLY_SHUFFLE_SEED).shuffle(shuffled_dolly)
-    clean_pool_size = min(len(shuffled_dolly), targets["clean_control"] * _DOLLY_OVERSAMPLE_FACTOR)
+    clean_pool_size = min(len(shuffled_dolly), targets["clean_control"] * dolly_oversample_factor)
     clean_pool = shuffled_dolly[:clean_pool_size]
     # The rest of the shuffled pool, not a fixed multiple: ambiguous_boundary only accepts
     # rows that already have a Dolly `context` field (~30% of the corpus), and clean_control
@@ -107,7 +111,8 @@ def write_report(report: dict, report_path: str | Path, **extra) -> None:
 
 def run_real_build(*, upstream_root: str | Path, work_dir: str | Path,
                     dataset_path: str | Path, report_path: str | Path,
-                    token_cap: int) -> dict:
+                    token_cap: int, targets: dict[str, int] | None = None,
+                    dolly_oversample_factor: int = _DOLLY_OVERSAMPLE_FACTOR) -> dict:
     """Fetch every real ADR 0001 source and exclusion-pool text, build the
     dataset, and write it plus its report to disk. No manual intervention
     step and no HF_TOKEN: every call below is either a local template or an
@@ -135,6 +140,8 @@ def run_real_build(*, upstream_root: str | Path, work_dir: str | Path,
         exclusion_exact_keys=exact_keys,
         exclusion_near_keys=near_keys,
         token_cap=token_cap,
+        targets=targets,
+        dolly_oversample_factor=dolly_oversample_factor,
     )
     write_dataset(result["examples"], dataset_path)
     write_report(
@@ -142,5 +149,8 @@ def run_real_build(*, upstream_root: str | Path, work_dir: str | Path,
         exclusion_pool_size=len(exclusion_texts),
         injection_raw_pool_size=len(injection_raw_rows),
         dolly_pool_size=len(dolly_rows),
+        dolly_rows_canonical_sha256=hashlib.sha256(
+            json.dumps(dolly_rows, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        ).hexdigest(),
     )
     return result

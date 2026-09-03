@@ -225,6 +225,18 @@ class AblationEpochRunnerTests(unittest.TestCase):
         self.assertEqual(default.checkpoint_steps, [120])
         self.assertEqual(override.checkpoint_steps, [2, 4])
 
+    def test_checkpoint_callback_runs_only_after_durable_save(self):
+        observed = []
+        store = self._store("callback")
+
+        run_ablation_epoch(
+            protocol_version="ablation-v1", runtime=_ToyRuntime(), total_steps=3,
+            checkpoint_store=store, checkpoint_interval=1,
+            on_checkpoint=lambda measurement: observed.append((measurement.step_index, store.load()["step_index"])),
+        )
+
+        self.assertEqual(observed, [(1, 1), (2, 2), (3, 3)])
+
     def test_frozen_attempt_one_protocol_is_rejected(self):
         """Allowing Attempt-1 here would silently change its frozen recovery contract."""
         with self.assertRaisesRegex(ValueError, "ablation-only"):

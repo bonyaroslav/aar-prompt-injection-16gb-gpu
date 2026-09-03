@@ -190,6 +190,7 @@ class RealQLoRATrainerAdapter:
         total_steps: int,
         seed: int,
         checkpoint_interval: int = 120,
+        on_checkpoint=None,
     ):
         """Run only the opt-in ablation path through the injected runtime seam."""
         if protocol_version == "phase1-2026-08-29":
@@ -210,7 +211,23 @@ class RealQLoRATrainerAdapter:
             total_steps=total_steps,
             checkpoint_store=checkpoint_store,
             checkpoint_interval=checkpoint_interval,
+            on_checkpoint=on_checkpoint,
         )
+
+    def save_ablation_checkpoint(self, *, seed: int, epoch: int, sequence_length: int) -> str:
+        """Register an adapter produced by the ablation-only step runner.
+
+        Keeping this separate from ``run_ablation_epoch`` means an interruption
+        before a durable optimizer-safe step cannot leave a checkpoint advertised
+        as complete.  The returned fingerprint uses the same registry and merge
+        path as normal training checkpoints.
+        """
+        adapter_dir = Path(self.runtime.save_ablation_adapter(
+            seed=seed, epoch=epoch, sequence_length=sequence_length,
+        ))
+        fingerprint = _directory_fingerprint(adapter_dir)
+        self._adapters[fingerprint] = adapter_dir
+        return fingerprint
 
     def merge_checkpoint(self, fingerprint: str, output_dir: Path) -> None:
         try:
@@ -302,6 +319,18 @@ class _TransformersQLoRARuntime:
         self._ablation_accumulation = self._ablation_optimizer["gradient_accumulation_steps"]
         self.optimizer.zero_grad(set_to_none=True)
         return self
+
+    def save_ablation_adapter(self, *, seed: int, epoch: int, sequence_length: int) -> Path:
+        """Persist the current ablation adapter after the epoch has completed."""
+        if self.model is None or self.tokenizer is None:
+            raise RuntimeError("ablation training state is not initialized")
+        adapter_dir = self.work_dir / "adapters" / f"seed-{seed}" / f"ablation-epoch-{epoch}-seq-{sequence_length}"
+        if adapter_dir.exists():
+            raise FileExistsError(f"ablation adapter checkpoint already exists: {adapter_dir}")
+        adapter_dir.mkdir(parents=True)
+        self.model.save_pretrained(adapter_dir, safe_serialization=True)
+        self.tokenizer.save_pretrained(adapter_dir)
+        return adapter_dir
 
     def optimizer_safe_step(self, step_index: int) -> None:
         """Finish one complete accumulation group and clear gradients before return."""

@@ -204,6 +204,7 @@ def run_ablation_epoch(
     total_steps: int,
     checkpoint_store: MidEpochCheckpointStore,
     checkpoint_interval: int = 120,
+    on_checkpoint=None,
 ) -> AblationEpochResult:
     """Run an ablation epoch, checkpointing only after optimizer-safe steps.
 
@@ -237,7 +238,10 @@ def run_ablation_epoch(
             state = runtime.capture_mid_epoch_state(completed_steps)
             if state.get("step_index") != completed_steps:
                 raise ValueError("runtime snapshot must identify the completed optimizer step")
-            checkpoints.append(checkpoint_store.save(state))
+            measurement = checkpoint_store.save(state)
+            checkpoints.append(measurement)
+            if on_checkpoint is not None:
+                on_checkpoint(measurement)
 
     return AblationEpochResult(
         mid_epoch_resume_fired=restored_state is not None,
