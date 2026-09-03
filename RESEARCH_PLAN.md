@@ -16,6 +16,29 @@ the capability failure. The run is ablation-only: no held-out data, selection,
 or frozen-bootstrap input was touched. Decision record:
 `docs/issue-31-corpus-ablation-decision.md`.
 
+**Update 2026-09-03 (later):** #32 (provenance manifest + claim-language gate) is
+closed. `runner/publication_gates.py` builds a receipt for every numeric leaf of
+every registered report from its report/section/JSON-location, canonical value
+and resolved input digests, and fails closed — naming the value and location —
+when a submitted report carries a number with no matching receipt; the same
+command rejects the five efficacy terms (*robust*, *secure*, *resistant*,
+*mitigation*, *defense that works*) and any capability claim that does not name
+its evaluation modality. The provenance manifest maps every table to its input
+digests, the canonical-JSON protocol digest (with an explicit statement that it
+is the checkout-invariant content digest, not the raw-file SHA-256), the
+analysis version and the bootstrap parameters. Three digest-only supplemental
+sources — the built training corpus, the baseline resource comparison, and
+`protocol/power_notes.md` — are attested without publishing their contents so
+#29's corpus-nutrition, resource-accounting and held-out-MDE figures trace to a
+digest; #27's frozen-input allowlist is unchanged (decision record:
+`docs/issue-32-provenance-source-decision.md`). `runner/publication_report_inputs.py`
+declares the #28/#29 sections read-only; `runner/publication_gate_run.py` runs
+both gates over the current outputs in one command. Verified: `reports=2
+sections=13 receipted_numbers=1763 orphans=0 claim_language_violations=0`,
+committed as `analysis/publication-provenance-manifest.json`. Full suite 368
+pass / 1 skip. #33 re-runs the gates across the complete set (including the
+smoke/recovery compute ledger) as the final packaging step.
+
 **Date:** 2026-08-29  
 **Repository:** `aar-prompt-injection-16gb-gpu`
 
