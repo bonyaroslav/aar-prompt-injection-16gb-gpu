@@ -148,12 +148,24 @@ def assemble_evidence(*, evidence_root: Path, recovery_root: Path, repo_root: Pa
     return claim_report, integrity_report, frozen_record, manifest_path
 
 
+def _write_json(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8", newline="\n",
+    )
+
+
 def run(*, evidence_root: Path, recovery_root: Path, repo_root: Path,
-        corpus_root: Path, power_notes: Path) -> dict:
+        corpus_root: Path, power_notes: Path, reports_out: Path | None = None) -> dict:
     claim_report, integrity_report, frozen_record, manifest_path = assemble_evidence(
         evidence_root=evidence_root, recovery_root=recovery_root,
         repo_root=repo_root, corpus_root=corpus_root,
     )
+    if reports_out is not None:
+        _write_json(reports_out / "attempt1-claim-report.json", claim_report)
+        _write_json(reports_out / "attempt1-integrity-report.json", integrity_report)
+        _write_json(reports_out / "attempt1-frozen-input-record.json", frozen_record)
     reports = register_current_reports(
         claim_report=claim_report, integrity_report=integrity_report
     )
@@ -197,13 +209,18 @@ def main(argv=None) -> int:
     parser.add_argument("--corpus-root", type=Path, default=REPO_ROOT / "data" / "training")
     parser.add_argument("--power-notes", type=Path, default=REPO_ROOT / "protocol" / "power_notes.md")
     parser.add_argument("--out", type=Path)
+    parser.add_argument(
+        "--dump-reports", type=Path,
+        help="write the rendered claim / integrity / frozen-input reports into this "
+             "directory (human-readable evidence behind the provenance manifest)",
+    )
     args = parser.parse_args(argv)
 
     try:
         manifest = run(
             evidence_root=args.evidence_root, recovery_root=args.recovery_root,
             repo_root=args.repo_root, corpus_root=args.corpus_root,
-            power_notes=args.power_notes,
+            power_notes=args.power_notes, reports_out=args.dump_reports,
         )
     except (OSError, EvidenceAssemblyError) as error:
         print(f"publication gate run failed to assemble evidence: {error}", file=sys.stderr)

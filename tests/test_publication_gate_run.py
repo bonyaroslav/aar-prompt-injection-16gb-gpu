@@ -10,7 +10,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from runner.publication_gate_run import EvidenceAssemblyError, _one, _peak_vram_gb
+from runner.publication_gate_run import (
+    EvidenceAssemblyError,
+    _one,
+    _peak_vram_gb,
+    _write_json,
+)
 
 
 class HelperTests(unittest.TestCase):
@@ -45,6 +50,14 @@ class HelperTests(unittest.TestCase):
             _one(self.root, "real-baseline-*", reject=("comparison",)).name,
             "real-baseline-20260829",
         )
+
+    def test_write_json_is_deterministic_lf_sorted(self):
+        target = self.root / "nested" / "report.json"
+        _write_json(target, {"b": 2, "a": [1, 2]})
+        raw = target.read_bytes()
+        self.assertEqual(raw, b'{\n  "a": [\n    1,\n    2\n  ],\n  "b": 2\n}\n')
+        _write_json(target, {"a": [1, 2], "b": 2})
+        self.assertEqual(target.read_bytes(), raw)
 
 
 if __name__ == "__main__":

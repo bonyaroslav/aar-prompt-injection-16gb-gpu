@@ -1,0 +1,176 @@
+{
+  "analysis_version": "phase1-analysis-2026-09",
+  "completed_seed_count": 3,
+  "completed_seeds": [
+    17,
+    42,
+    2026
+  ],
+  "epochs_per_seed": 3,
+  "frozen_seeds": [
+    17,
+    42,
+    2026
+  ],
+  "inputs": [
+    {
+      "digest": "sha256:399cf1572ccf580f4741429230cb556840a7e1c9fdb514ba053c9a6f16ce7f20",
+      "digest_kind": "canonical_json",
+      "path": "protocol/manifest.json",
+      "role": "protocol_manifest"
+    },
+    {
+      "digest": "sha256:85179530f7fadcaa4caf5f566875b7a4167e890a458f1c9f4be8c4e4a39f2da5",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/real-baseline-20260829-205020",
+      "role": "baseline_bundle"
+    },
+    {
+      "digest": "sha256:db7522d1fc7de9a5b399a07588b62e0cd4c35f978e86e4536c69e0fc0d6f0205",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/training-seed17-20260830-071553",
+      "role": "seed17_training_bundle"
+    },
+    {
+      "digest": "sha256:808587e7b249a29b61884a6b04e1d3436268d6421eb54caa2069c30b5d39f3d5",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed17-epoch1-20260830-071553",
+      "role": "seed17_evaluation_bundle_epoch1"
+    },
+    {
+      "digest": "sha256:4493b84f076b227fba126c63fa5cec0a7b9241ec3fe9d163b7f17af73de0a4d8",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed17-epoch2-20260830-071553",
+      "role": "seed17_evaluation_bundle_epoch2"
+    },
+    {
+      "digest": "sha256:ad3de90133d84f03a492346f4a3833c478fc3f25e7c3e44291d913dab2eb2779",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed17-epoch3-20260830-071553",
+      "role": "seed17_evaluation_bundle_epoch3"
+    },
+    {
+      "digest": "sha256:46dfe6eab879994e8b248a7a5f5c80d35681a7e610aa2ae70c501b1f72e2e5f8",
+      "digest_kind": "canonical_json",
+      "path": "runs/selection-seed17-20260830-071553/selection_record.json",
+      "role": "seed17_selection_record"
+    },
+    {
+      "digest": "sha256:358acc1d428b1a1f3b361cdba4e3c50ae501b27309e1961ba91432b3f79cb496",
+      "digest_kind": "sha256",
+      "path": "runs/seed17-resource-comparison-20260830-071553/seed_resource_comparison.json",
+      "role": "seed17_resource_comparison"
+    },
+    {
+      "digest": "sha256:fed67d6de9c26446a59434a139ec80574d37e8d5a3fa4a6a132c4d1cddc12394",
+      "digest_kind": "sha256",
+      "path": "analysis/seed17-outcomes-summary.md",
+      "role": "seed17_outcomes_summary"
+    },
+    {
+      "digest": "sha256:dfb5601a93a4cd086e92af41aa0b94c23d4e47fb4b0c4ec11a7f26ad1f23d9cc",
+      "digest_kind": "sha256",
+      "path": "docs/issue-21-null-selection-continuation-decision.md",
+      "role": "seed17_continuation_decision"
+    },
+    {
+      "digest": "sha256:2bfc75f403696cc913b0c81cc0f7938616b31819f5ee55a55658c9b575110174",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/training-seed42-20260831-201248-1b487000",
+      "role": "seed42_training_bundle"
+    },
+    {
+      "digest": "sha256:3ac5d5a632dd91b3abf50e69df1d1d8c2937852f7d55e11d7e465a15f86acb91",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed42-epoch1-20260831-201248-1b487000",
+      "role": "seed42_evaluation_bundle_epoch1"
+    },
+    {
+      "digest": "sha256:ce2025c8e238a050417203e523136782ae454c560d1b41b479396e6112b2d959",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed42-epoch2-20260831-201248-1b487000",
+      "role": "seed42_evaluation_bundle_epoch2"
+    },
+    {
+      "digest": "sha256:27d6780ca7fc0b11656d799fdeb20309c982011b720218b3168697a458c8fc5c",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed42-epoch3-20260831-201248-1b487000",
+      "role": "seed42_evaluation_bundle_epoch3"
+    },
+    {
+      "digest": "sha256:a2cdd7c2e1c1b8989f9b7c254cae56f2b812605436ba04861a1d667a79b2cdce",
+      "digest_kind": "canonical_json",
+      "path": "runs/selection-seed42/selection_record.json",
+      "role": "seed42_selection_record"
+    },
+    {
+      "digest": "sha256:5bfc93f20a8daf517e7fc21b18df512ad6438d8d5360df4357a6f79087e1a3a1",
+      "digest_kind": "sha256",
+      "path": "runs/seed42-resource-comparison/seed_resource_comparison.json",
+      "role": "seed42_resource_comparison"
+    },
+    {
+      "digest": "sha256:ddd31cd8292b4bf0d825e04cbdb7402748ff48cbb0cbbdbb8d14c06a93e293ca",
+      "digest_kind": "sha256",
+      "path": "analysis/seed42-outcomes-summary.md",
+      "role": "seed42_outcomes_summary"
+    },
+    {
+      "digest": "sha256:a1ad66e4213e16d198e20a884b2f3e49c19d2b1ab5cef4420b07d209494e6415",
+      "digest_kind": "sha256",
+      "path": "docs/issue-22-seed-42-execution-decision.md",
+      "role": "seed42_continuation_decision"
+    },
+    {
+      "digest": "sha256:ff249dd9ff3c7650834c2562681f1383768ec4e650dba550010ed4d8a2f72a6a",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/training-seed2026-20260901-112915-bf0809d1",
+      "role": "seed2026_training_bundle"
+    },
+    {
+      "digest": "sha256:e152ec08ed476d80227f8c20ed9c0b66223ddcd3dc131ec5d0d55976242e02c5",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed2026-epoch1-20260901-112915-bf0809d1",
+      "role": "seed2026_evaluation_bundle_epoch1"
+    },
+    {
+      "digest": "sha256:47975dc9f41da9a437690dcf71f400d262f64dbd684d2de8f1622621b1f36002",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed2026-epoch2-20260901-112915-bf0809d1",
+      "role": "seed2026_evaluation_bundle_epoch2"
+    },
+    {
+      "digest": "sha256:a34de34ee48b9f71ceaa77b92ca3a94d8f882be6ab8f185894445059d308dbe7",
+      "digest_kind": "bundle_checksums",
+      "path": "runs/eval-seed2026-epoch3-20260901-112915-bf0809d1",
+      "role": "seed2026_evaluation_bundle_epoch3"
+    },
+    {
+      "digest": "sha256:8df462a4548fe652660409ef76b2b987a7794a0904f9b400cf8bdf1ba10a0d23",
+      "digest_kind": "canonical_json",
+      "path": "runs/selection-seed2026/selection_record.json",
+      "role": "seed2026_selection_record"
+    },
+    {
+      "digest": "sha256:596037ad2dc6f4002c2794b6086270c91b5b1f7fcf435dad92e209113d4b9ec2",
+      "digest_kind": "sha256",
+      "path": "runs/seed2026-resource-comparison/seed_resource_comparison.json",
+      "role": "seed2026_resource_comparison"
+    },
+    {
+      "digest": "sha256:38d6ebde3bb9151de5461e6a50d641dd8161133d62a101afa0d8d53ea4c87c53",
+      "digest_kind": "sha256",
+      "path": "analysis/seed2026-outcomes-summary.md",
+      "role": "seed2026_outcomes_summary"
+    },
+    {
+      "digest": "sha256:a13112686f8046ce619bf0c5b043c58c077eaaf6b4e11f3bf56a5e9b7781e8cf",
+      "digest_kind": "sha256",
+      "path": "docs/issue-23-seed-2026-execution-decision.md",
+      "role": "seed2026_continuation_decision"
+    }
+  ],
+  "protocol_manifest_digest": "399cf1572ccf580f4741429230cb556840a7e1c9fdb514ba053c9a6f16ce7f20",
+  "protocol_version": "phase1-2026-08-29",
+  "trained_checkpoint_count": 9
+}

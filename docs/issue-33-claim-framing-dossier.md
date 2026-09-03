@@ -1,11 +1,24 @@
 # Issue #33 — claim-framing dossier
 
-**Status:** facts gathered, framing decision deferred to the maintainer
+**Status:** facts gathered and frozen, framing decision deferred to the maintainer
 **Date:** 2026-09-03
 **Purpose:** Issue #33's results document must state a scientific claim whose
 wording the issue makes conditional on the outcomes of #30 and #31. Both have now
-landed. This file assembles every fact that bears on the wording so the claim can
-be decided after deeper analysis. It recommends nothing and closes nothing.
+landed. This file is the **prose fact base**: every fact that bears on the
+wording, with provenance. It recommends nothing and closes nothing.
+
+**This is one of four coordinated artifacts:**
+
+| File | Role |
+|---|---|
+| `docs/issue-33-claim-framing-dossier.md` (this) | prose fact base, per-fact provenance, and Section 6 decision list |
+| `docs/issue-33-interpretations.md` | six internally-consistent readings of the same evidence, each written as if it were the thesis |
+| `docs/adr/0002-issue-33-claim-framing.md` | frozen option space for D1–D5, arguments for/against, validation checklist, empty sign-off block |
+| `docs/issue-33-validation-guide.md` | how to independently regenerate and hand-check every number below |
+
+The numbers here are rendered from committed, regenerable artifacts:
+`analysis/attempt1-{claim-report,integrity-report,frozen-input-record}.json` and
+`analysis/publication-provenance-manifest.json`.
 
 The packaging half of #33 is unblocked and independent of this decision: the
 maintainer chose a **manifest-only** package (no physical staging). That work can

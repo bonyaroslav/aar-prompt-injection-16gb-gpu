@@ -39,6 +39,25 @@ committed as `analysis/publication-provenance-manifest.json`. Full suite 368
 pass / 1 skip. #33 re-runs the gates across the complete set (including the
 smoke/recovery compute ledger) as the final packaging step.
 
+**Update 2026-09-03 (later still):** #33 (final results document + manifest-only
+evidence package) is **in progress, deliberately paused on one decision.** Both
+of the issue's conditional wording triggers have resolved (#30: MMLU does not
+collapse in chat mode, scoring-modality axis still open; #31: capability collapse
+survives removing the injection rows, but single-seed on a rebuilt corpus). The
+maintainer is taking the claim-framing decision slowly, after an independent
+re-check, so the fact base is frozen instead: `analysis/attempt1-{claim-report,
+integrity-report,frozen-input-record}.json` are now committed (rendered via
+`python -m runner.publication_gate_run --dump-reports analysis`, byte-deterministic,
+no held-out data), alongside four coordinated docs —
+`docs/issue-33-claim-framing-dossier.md` (prose fact base),
+`docs/issue-33-interpretations.md` (six readings of the same evidence),
+`docs/adr/0002-issue-33-claim-framing.md` (frozen D1–D5 option space + empty
+sign-off), `docs/issue-33-validation-guide.md` (independent-verification steps).
+`analysis/results.md`, the final gate pass, and
+`analysis/publication-package-manifest.json` are **not** written; #33 stays open
+until ADR 0002's sign-off block is filled. Chain #27–#33 otherwise complete;
+all-incurred compute ≈ 59.9 of 72 GPU-hours.
+
 **Date:** 2026-08-29  
 **Repository:** `aar-prompt-injection-16gb-gpu`
 
