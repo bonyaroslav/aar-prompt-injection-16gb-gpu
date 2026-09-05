@@ -83,8 +83,10 @@ available to add; no zero or estimate is substituted.
   counts, and output bytes.
 - `runs/selection-seed17-20260830-071553/selection_record.json`: finalized
   null selection and final-record size.
-- `analysis/seed17-outcomes-summary.md` and `docs/issue-12-analysis-summary.md`:
+- `analysis/seed17-outcomes-summary.md` and `docs/issue-12-analysis-for-further-work.md`:
   committed epoch-duration range and the prior evidence interpretation.
+  (`docs/issue-12-analysis-summary.md`, a byte-identical duplicate of the latter,
+  was deleted 2026-09-05; recover from git history if needed.)
 
 ## Protocol compatibility
 
