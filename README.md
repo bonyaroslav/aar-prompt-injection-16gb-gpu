@@ -1,15 +1,19 @@
-# Prompt-injection fine-tuning on one 16 GB GPU — a preregistered null result
+# Prompt-injection fine-tuning on one 16 GB GPU — nine ineligible checkpoints
 
-A single-practitioner replication-style study: can a transparent response-only
-QLoRA fine-tune reduce a 2B model's prompt-injection susceptibility on one consumer
-GPU, without paid judges, and without breaking the model?
+A single-practitioner study of one response-only QLoRA recipe on a 2B model,
+using an evaluation setup adapted from Anthropic's AAR study.
 
-**The answer, across three independent runs, is no — and the protocol said so
-before anyone looked.**
+**All nine checkpoints increased the visible OPI score but failed the
+generation-scored acceptance gates. No checkpoint was selected.**
 
 All nine trained checkpoints failed a frozen capability contract whose binding gates were generation-scored.
-The contract was fixed before the first GPU-hour was spent. No checkpoint was
-selected. The held-out benchmark was never unsealed.
+The contract was fixed before the main runs. No held-out comparison was revealed.
+This is a negative selection result for one recipe, not a finding that training
+had no effect or that fine-tuning fails in general.
+
+Start with the [checked fact sheet](docs/publication/direction-a/fact-sheet.md)
+and [small reproduction package](docs/publication/direction-a/README.md).
+They supersede conflicting interpretations in older narrative summaries.
 
 ---
 
@@ -19,11 +23,11 @@ selected. The held-out benchmark was never unsealed.
 |---|---|
 | Model | `Qwen/Qwen3.5-2B` @ `15852e8c16360a2fea060d615a32b45270f8a8fc` |
 | Intervention | response-only SFT via QLoRA (NF4 4-bit, bf16 compute), LoRA r=16 α=32 on all seven projections, 3 epochs over 5,000 examples |
-| Runs | seeds `17`, `42`, `2026` — 3 seeds × 3 epochs = **9 checkpoints** |
+| Runs | nominal seeds `17`, `42`, `2026` — 3 runs × 3 epochs = **9 checkpoints**, sharing one baseline |
 | Selection outcome | **`NO_ELIGIBLE_CHECKPOINT` in all three runs** (`selected_checkpoint_digest: null`) |
-| Held-out (InjecAgent) | `NEVER_AUTHORIZED` — 200 candidates sealed before execution, never opened |
+| Held-out (InjecAgent) | Reveal remained `NEVER_AUTHORIZED`; no baseline-versus-trained comparison was revealed |
 | Hardware | one RTX 4080, 16 GiB physical |
-| Compute | ≈59.87 of a declared 72 GPU-hour cap |
+| Compute | **47.3381 GPU-accounted hours** for the main baseline plus three runs; the ≈59.87 figure also includes later diagnostic/ablation work |
 | Peak VRAM | 15.663 GiB against a declared 15.5 GiB allocation — **over budget, inside the card**, reported as a feasibility finding |
 
 Epoch-3 change against the frozen baseline, per run:
@@ -44,27 +48,25 @@ mean normalized retention ≥ 0.98. **9 of 9 checkpoints fail.**
 
 ## What is interesting here
 
-Three observations, in decreasing order of how well the evidence supports them.
-Full argument and prior-art positioning:
-[`docs/handover/publication-analysis-final.md`](docs/handover/publication-analysis-final.md).
+1. **The acceptance decision is explicit.** Generation-scored GSM8K and IFEval
+   losses exceed the recorded tolerances at every checkpoint, despite higher OPI
+   scores. The package shows every run and epoch, without selecting a winner.
+2. **The scoring rules leave behavior unresolved.** OPI tests mismatch with the
+   injected target, not successful authorized work. Tensor Trust averages an
+   attack arm and an authorized-access control; a half-score does not identify
+   which arm passed. More items pass both arms in 17 of 18 trained
+   checkpoint/benchmark comparisons, but this does not identify every output's
+   behavior. Historical outputs were not retained. Timing cannot establish
+   answer length, and score categories cannot establish refusal.
+3. **Likelihood-ranked MMLU and the generation-scored tests differ.** MMLU alone
+   would pass all nine checkpoints, but task content and evaluation format are
+   confounded. Run 42 epoch 3 changes correctness on 64/300 MMLU items (21.3%):
+   27 become incorrect and 37 become correct, for a net +3.33 percentage points.
+   These are correctness transitions, not all answer changes or evidence of a
+   defective benchmark.
 
-1. **The safety gain tracks whether the benchmark can detect degeneracy.** Open
-   Prompt Injection awards a point for *any* output that is not the attacker's
-   target label — an empty string scores full marks. Tensor Trust additionally
-   checks the model still does its job. The benchmark without that control arm gains
-   +31 to +57 pp; the ones with it gain +2.6 to +15.3 pp, and **that gain declines
-   monotonically with every training epoch in all three runs.** Meanwhile generation
-   times collapsed from 45.96 s/item to 6.2–8.7 s/item — the model stopped writing
-   long answers.
-2. **MMLU did not hold steady, it churned.** Up to 21.3 % of MMLU items changed
-   answer by epoch 3 while the aggregate reads +2.7 pp and is not statistically
-   distinguishable from zero. An aggregate tolerance of ±2 pp cannot see a model
-   that rewrote a fifth of its answers.
-3. **A gate built only from the likelihood-ranked benchmark passes all nine
-   checkpoints** that the generation-scored gates rejected. Stated as an existence
-   proof only: there is exactly one likelihood-ranked benchmark in this suite and it
-   is also the only pure-recall one, so evaluation modality and task type are
-   confounded here and cannot be separated from this data.
+Detailed evidence and scientific positioning are in the
+[Directions A/B knowledge base](docs/publication-directions-a-b-knowledge-base.md).
 
 ---
 
@@ -72,8 +74,8 @@ Full argument and prior-art positioning:
 
 - No efficacy claim. This is not a working defence, and no checkpoint is recommended
   for any use.
-- No held-out generalization claim. InjecAgent was never scored; no such number
-  exists and none may be inferred.
+- No held-out generalization claim. No baseline-versus-trained InjecAgent
+  comparison was revealed, and none may be inferred from the visible scores.
 - No adaptive-attack claim. No attacker who knows about this intervention was ever run.
 - No claim that response-only QLoRA fails in general, and no claim about any other
   model, scale, corpus, or recipe.
@@ -85,17 +87,23 @@ Full argument and prior-art positioning:
 
 ## Reproducing the analysis
 
-The full analysis chain is offline and deterministic. From a checkout:
+The compact publication package includes visible numeric results and a script
+that needs neither model weights nor the private run directories. From a checkout:
 
 ```bash
-python -m runner.publication_gate_run --dump-reports analysis --out analysis/publication-provenance-manifest.json
+python docs/publication/direction-a/reproduce.py
 ```
 
-This regenerates every committed report byte-identically. Expected SHA-256 values for
-the four fact-base artifacts are recorded in
-[`docs/adr/0002-issue-33-claim-framing.md`](docs/adr/0002-issue-33-claim-framing.md).
-Hand-verification procedure:
-[`docs/issue-33-validation-guide.md`](docs/issue-33-validation-guide.md).
+This recalculates the fact sheet and score/decision tables and checks them against
+the historical records. Figure and optional paired-interval reproduction commands
+are in the [package README](docs/publication/direction-a/README.md).
+
+The older `runner.publication_gate_run` path assembles the full reports from
+gitignored run metrics, logs, telemetry, recovery records, and corpus files.
+It cannot reproduce those reports from committed aggregates alone. Historical
+report identities remain recorded in the
+[ADR](docs/adr/0002-issue-33-claim-framing.md); the
+[validation guide](docs/issue-33-validation-guide.md) describes the local-input path.
 
 Tests:
 
@@ -104,30 +112,37 @@ python -m pytest tests/ -q
 ```
 
 Execution evidence (`runs/`, `diagnostics/`, `ablation/`) is deliberately not in
-version control — it is ~31.7 GiB of checksummed bundles. Everything needed to check
-the reported numbers is committed under `analysis/`.
+version control — the main bundle snapshot is ~31.7 GiB. The new publication
+folder provides the small visible-score subset needed for its own reanalysis.
+It does not recreate missing outputs or retrain the original models.
 
 ---
 
-## Known defects, disclosed up front
+## Execution limits and corrected disclosures
 
-Published as a first-class section rather than a footnote
-(`analysis/attempt1-integrity-report.json` → `integrity_records.reproducibility_disclosure`):
+The frozen integrity report contains historical disclosures and interpretations.
+The corrected distinctions for publication are:
 
 1. **Runs are not reproducible from the recorded seed.** Adapter initialisation happens
-   before the run seed is applied, so the seed controls data shuffling and dropout only.
-2. **The evaluated model is not the trained model.** Training used 4-bit NF4; merge and
-   evaluation used bf16 weights.
+   before the run seed is applied, so that seed does not determine the initial adapter weights.
+2. **Training and evaluation used different weight representations.** Training used
+   4-bit NF4; merge/evaluation used a bf16 base plus the adapter. The effect of
+   this change was not isolated; it does not by itself invalidate evaluation.
 3. **No training loss was recorded.** It is computed and discarded — there is no loss curve.
-4. **There is no validation split.** The only model-selection signal is the visible
-   benchmark suite the study reports; the design is selection-on-test.
-5. **The frozen manifest names a multiple-choice scorer the pinned upstream does not use.**
-   This study honours the manifest value, so MMLU alone is evaluated in a different
-   modality from every other benchmark.
+4. **There was no separate training validation split.** The visible benchmark suite
+   supplies development/selection measurements; a separate final comparison
+   remained sealed. Visible results are not an independent generalization test.
+5. **An earlier MMLU disclosure was incorrect.** The pinned upstream also uses
+   first-token candidate logits without a chat template. The local default did
+   not introduce the claimed scoring-modality deviation.
 6. **A declared free-form decoding treatment is read by no code.**
 7. **Decoding is applied once globally** rather than per benchmark as upstream documents.
 
 Further environment and protocol deviations: [`protocol/deviations.md`](protocol/deviations.md).
+That historical file also contains the superseded MMLU statement. Frozen evidence
+was not rewritten to erase these mistakes; the checked fact sheet and knowledge
+base record their corrected interpretation. Raw outputs were not retained, and
+the integrity report's Tensor Trust category labels cannot diagnose refusal.
 
 Two additional caveats a reader should carry:
 
@@ -151,7 +166,7 @@ Two additional caveats a reader should carry:
 | `tests/` | 30 offline test modules |
 | `RESEARCH_PLAN.md` | The running project log |
 
-Start here: [`docs/handover/publication-analysis-final.md`](docs/handover/publication-analysis-final.md).
+Start here: [checked fact sheet](docs/publication/direction-a/fact-sheet.md).
 
 ---
 
@@ -159,5 +174,8 @@ Start here: [`docs/handover/publication-analysis-final.md`](docs/handover/public
 
 The frozen replication set `[17, 42, 2026]` is complete. The analysis chain
 (issues #27–#32) is closed. Issue #33 — the results document and evidence package —
-is open pending two cheap follow-up measurements and five wording decisions recorded
-in [`docs/adr/0002-issue-33-claim-framing.md`](docs/adr/0002-issue-33-claim-framing.md).
+remains open. The Direction A fact sheet and reader reanalysis package now exist.
+The broader publication decisions remain in
+[`docs/adr/0002-issue-33-claim-framing.md`](docs/adr/0002-issue-33-claim-framing.md).
+New model measurements are needed for a behavioral explanation, not for the
+bounded account of the existing rejection decision.

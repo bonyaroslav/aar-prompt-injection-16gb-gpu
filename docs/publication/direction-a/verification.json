@@ -1,0 +1,11 @@
+{
+  "input_score_rows": 16000,
+  "model_states": 10,
+  "matched_historical_trained_means": 54,
+  "matched_selection_records": 3,
+  "eligible_checkpoints": 0,
+  "tensor_trust_comparisons_recalculated": 18,
+  "independently_recomputed_paired_intervals": 54,
+  "matplotlib_version": "3.11.1",
+  "scope": "Reanalysis of supplied numeric observations; no model inference, original repository imports, or held-out access."
+}

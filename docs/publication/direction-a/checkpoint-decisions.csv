@@ -1,0 +1,10 @@
+state,nominal_seed,epoch,gsm8k_loss_pp,ifeval_loss_pp,mmlu_loss_pp,mean_normalized_retention,visible_composite_delta_pp,eligible,meaningful_visible_gain_with_gates,failed_gates
+run17_epoch1,17,1,47.5,20.5,-6.333333333333336,0.7107242897158863,17.38888888888889,False,False,gsm8k;ifeval;mean_normalized_retention
+run17_epoch2,17,2,28.499999999999996,21.999999999999996,-4.0000000000000036,0.7750365186725098,20.5,False,False,gsm8k;ifeval;mean_normalized_retention
+run17_epoch3,17,3,17.999999999999993,18.0,-2.6666666666666727,0.8364926458388234,20.61111111111111,False,False,gsm8k;ifeval;mean_normalized_retention
+run42_epoch1,42,1,45.49999999999999,23.0,-7.666666666666666,0.7140875862540138,27.333333333333325,False,False,gsm8k;ifeval;mean_normalized_retention
+run42_epoch2,42,2,22.499999999999996,13.0,-4.666666666666663,0.8549494594585801,22.944444444444446,False,False,gsm8k;ifeval;mean_normalized_retention
+run42_epoch3,42,3,23.5,13.0,-3.3333333333333326,0.842571174811388,17.94444444444444,False,False,gsm8k;ifeval;mean_normalized_retention
+run2026_epoch1,2026,1,44.5,18.0,-6.666666666666665,0.7398406517078376,20.555555555555554,False,False,gsm8k;ifeval;mean_normalized_retention
+run2026_epoch2,2026,2,28.999999999999996,20.0,-4.333333333333334,0.7855698376911739,19.944444444444446,False,False,gsm8k;ifeval;mean_normalized_retention
+run2026_epoch3,2026,3,19.999999999999996,14.500000000000002,-2.6666666666666727,0.8463925407561398,19.38888888888889,False,False,gsm8k;ifeval;mean_normalized_retention

@@ -1,0 +1,24 @@
+{
+  "date": "2026-09-06",
+  "python": "3.12.14",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "source_file_hashes_matched": 16,
+  "standalone_numeric_outputs_byte_identical": true,
+  "stdlib_only_isolated_python_passed": true,
+  "corrupted_csv_rejected": true,
+  "historical_tensor_trust_distributions_matched": 18,
+  "worked_paired_matrix_matched": true,
+  "visible_scores_sha256": "cfcc29846a21d857d3be9a0dbcd930e511af88db059ea5cef50134f36aee5b27",
+  "reproduce_py_sha256": "5661209fe2d5b10e8fc6cf5b4b6b342f3e82b3a6d05cb40a937b3bed07806109",
+  "full_isolated_run": {
+    "input_score_rows": 16000,
+    "model_states": 10,
+    "matched_historical_trained_means": 54,
+    "matched_selection_records": 3,
+    "eligible_checkpoints": 0,
+    "tensor_trust_comparisons_recalculated": 18,
+    "independently_recomputed_paired_intervals": 54,
+    "matplotlib_version": "3.11.1",
+    "scope": "Reanalysis of supplied numeric observations; no model inference, original repository imports, or held-out access."
+  }
+}
