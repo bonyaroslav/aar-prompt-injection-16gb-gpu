@@ -1,0 +1,59 @@
+cff-version: 1.2.0
+message: >-
+  If you use this research software or its analysis, please cite this repository
+  and record the commit used. Cite the related publications separately when
+  discussing their methods or findings.
+type: software
+title: "Prompt-injection fine-tuning on one 16 GB GPU: nine ineligible checkpoints"
+authors:
+  - given-names: Yaroslav
+    family-names: Bondar
+    website: "https://github.com/bonyaroslav"
+repository-code: "https://github.com/bonyaroslav/aar-prompt-injection-16gb-gpu"
+url: "https://github.com/bonyaroslav/aar-prompt-injection-16gb-gpu"
+license: MIT
+abstract: >-
+  Research software, protocols, and numeric results for one response-only QLoRA
+  recipe on Qwen3.5-2B using an RTX 4080 with 16 GB GPU memory. Three runs produced
+  nine checkpoints; none met the preset capability requirements. The included
+  analysis package recalculates visible scores and acceptance decisions without
+  model weights or a GPU. Historical generated outputs were not retained.
+  The local study adapts an evaluation setting from automated alignment research
+  and uses SecFid to frame limitations of attack-success measurements.
+keywords:
+  - prompt-injection
+  - llm-evaluation
+  - llm-security
+  - fine-tuning
+  - qlora
+  - local-llm
+  - qwen
+  - negative-results
+references:
+  - type: article
+    title: "Automated Researchers Can Mitigate Well-Characterized Alignment Failures"
+    authors:
+      - family-names: Chen
+        given-names: Yueh-Han
+      - family-names: Wen
+        given-names: Jiaxin
+      - family-names: Kirchner
+        given-names: Jan Hendrik
+    year: 2026
+    url: "https://alignment.anthropic.com/2026/automated-alignment-researchers/"
+  - type: article
+    title: "Security--Fidelity Tradeoffs: The Hidden Cost of Prompt Injection Defense"
+    authors:
+      - family-names: Hermon
+        given-names: Mitchell
+      - family-names: Gupta
+        given-names: Rahul
+      - family-names: Ruan
+        given-names: Weitong
+      - family-names: Sabir
+        given-names: Ekraam
+      - family-names: Wang
+        given-names: Haohan
+    year: 2026
+    doi: "10.48550/arXiv.2606.30783"
+    url: "https://arxiv.org/abs/2606.30783"

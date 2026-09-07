@@ -1,7 +1,14 @@
 # Prompt-injection fine-tuning on one 16 GB GPU — nine ineligible checkpoints
 
+[![Results](https://img.shields.io/badge/Results-fact_sheet-2563eb)](docs/publication/direction-a/fact-sheet.md)
+[![Reproduce analysis](https://img.shields.io/badge/Reproduce_analysis-CPU_only-0f766e)](docs/publication/direction-a/README.md)
+[![Protocol](https://img.shields.io/badge/Protocol-recorded-64748b)](protocol/manifest.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-64748b)](LICENSE)
+
 A single-practitioner study of one response-only QLoRA recipe on a 2B model,
-using an evaluation setup adapted from Anthropic's AAR study.
+using an evaluation setup adapted from Anthropic's **Automated Alignment
+Researcher (AAR)** study. The [scientific foundations](#scientific-foundations)
+below explain that connection and the role of SecFid in interpreting the results.
 
 **All nine checkpoints increased the visible OPI score but failed the
 generation-scored acceptance gates. No checkpoint was selected.**
@@ -11,9 +18,49 @@ The contract was fixed before the main runs. No held-out comparison was revealed
 This is a negative selection result for one recipe, not a finding that training
 had no effect or that fine-tuning fails in general.
 
-Start with the [checked fact sheet](docs/publication/direction-a/fact-sheet.md)
-and [small reproduction package](docs/publication/direction-a/README.md).
-They supersede conflicting interpretations in older narrative summaries.
+## Start here
+
+- **Understand the study:** [reader's guide](docs/START_HERE.md).
+- **Inspect the result:** [checked fact sheet](docs/publication/direction-a/fact-sheet.md).
+- **Check what the scores mean:** [scoring audit](docs/publication/direction-a/scorer-fact-sheet.md).
+- **Recalculate the tables without a GPU:** [small reproduction package](docs/publication/direction-a/README.md).
+
+These checked materials supersede conflicting interpretations in older narrative
+summaries. The reader's guide is also the entry point for the future project website.
+
+**Project website:** planned. For now, [start with the reader's guide](docs/START_HERE.md).
+<!-- Website placeholder: replace this line and the GitHub About website URL
+     when a public project page is available. Do not add a guessed deployment URL. -->
+<!-- Social-preview placeholder: docs/publication/assets/social-preview-placeholder.svg.
+     Preparation and upload details: docs/publication/repository-presentation.md. -->
+
+## Scientific foundations
+
+Two publications provide the starting point and the interpretive framework for
+this independent study:
+
+1. **Original inspiration and evaluation setting — Chen Yueh-Han, Jiaxin Wen,
+   and Jan Hendrik Kirchner (2026),
+   [Automated Researchers Can Mitigate Well-Characterized Alignment Failures](https://alignment.anthropic.com/2026/automated-alignment-researchers/).**
+   This Anthropic Fellows study investigates automated researchers that propose
+   and iteratively test alignment-training methods while preserving general
+   capability. It inspired this project and supplied the evaluation setting
+   adapted through the [pinned upstream harness](https://github.com/YuehHanChen/automated_alignment_researcher/tree/1899ad64fbfbc65790d259471cc4bf4de9437aa9).
+   Our experiment tests one response-only QLoRA recipe on a smaller model and
+   consumer GPU; it does not reproduce or refute the paper's iterative method search.
+
+2. **Framework for interpreting the scores — Mitchell Hermon, Rahul Gupta,
+   Weitong Ruan, Ekraam Sabir, and Haohan Wang (2026),
+   [Security–Fidelity Tradeoffs: The Hidden Cost of Prompt Injection Defense (SecFid)](https://arxiv.org/abs/2606.30783).**
+   Accepted at ICML 2026; first submitted to arXiv on **29 June 2026**.
+   SecFid distinguishes executing an injected instruction, processing it as task
+   data, and ignoring it. This motivates our distinction between avoiding an
+   attacker's target and completing the user's legitimate task. It is a central
+   foundation for the [scoring audit](docs/publication/direction-a/scorer-fact-sheet.md),
+   rather than evidence that our checkpoints suppressed content or refused:
+   their historical generated outputs were not retained.
+
+The local study is not affiliated with or endorsed by either research team.
 
 ---
 
@@ -165,8 +212,23 @@ Two additional caveats a reader should carry:
 | `docs/` | One decision record per closed ticket, ADRs, handovers, and the issue-33 framing set |
 | `tests/` | 30 offline test modules |
 | `RESEARCH_PLAN.md` | The running project log |
+| `CITATION.cff` | Citation metadata for this research software and its scientific references |
+| `LICENSE` / `LICENSE_SCOPE.md` | MIT license for original contributions and third-party scope notes |
 
 Start here: [checked fact sheet](docs/publication/direction-a/fact-sheet.md).
+
+---
+
+## Citation and license
+
+If you use this code or its analysis, cite the repository using
+[`CITATION.cff`](CITATION.cff), and record the commit used. Cite the related papers
+above when discussing their methods or findings. This repository is a research
+software artifact; it does not claim a separate peer-reviewed publication or DOI.
+
+Original project code and documentation are available under the
+[MIT License](LICENSE). Third-party code, datasets, model weights, and imported
+assistant instructions retain their own terms; see [license scope](LICENSE_SCOPE.md).
 
 ---
 

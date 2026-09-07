@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">Social-preview layout placeholder</title>
+  <desc id="description">Draft layout for a prompt-injection fine-tuning study on an RTX 4080 with 16 GB memory. Three runs produced nine checkpoints, none meeting preset capability requirements. Not a published social preview.</desc>
+  <rect width="1280" height="640" fill="#f8fafc"/>
+  <rect x="56" y="56" width="1168" height="528" rx="20" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="88" y="88" width="336" height="38" rx="8" fill="#e2e8f0"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="108" y="114" font-size="18" font-weight="700" fill="#475569">SOCIAL PREVIEW · PLACEHOLDER</text>
+    <text x="88" y="222" font-size="52" font-weight="700" fill="#0f172a">Prompt-injection fine-tuning</text>
+    <text x="88" y="286" font-size="48" font-weight="700" fill="#0f172a">on one 16 GB GPU</text>
+    <text x="88" y="366" font-size="28" fill="#334155">3 runs · 9 checkpoints · none met the preset</text>
+    <text x="88" y="406" font-size="28" fill="#334155">capability requirements.</text>
+    <text x="88" y="501" font-size="22" fill="#0f766e">RTX 4080 · Qwen3.5-2B · code, protocols, and results</text>
+    <text x="88" y="550" font-size="18" fill="#64748b">github.com/bonyaroslav/aar-prompt-injection-16gb-gpu</text>
+  </g>
+</svg>
