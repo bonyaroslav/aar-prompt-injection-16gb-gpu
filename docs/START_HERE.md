@@ -20,12 +20,4 @@ The numeric reanalysis requires Python and no GPU. Original training and model
 evaluation are separate, substantially larger tasks. Raw generated answers were
 not retained, so these records cannot establish a behavioral cause for the changes.
 
-## Project website
-
-**Placeholder — a standalone project website is not published yet.** This guide
-serves as the public entry point in the meantime. A future page can combine the
-plain-language explanation, one result figure, and these evidence links.
-
-<!-- Future overview/article slot: replace only when the public narrative is ready. -->
-
 Return to the [repository overview](../README.md).

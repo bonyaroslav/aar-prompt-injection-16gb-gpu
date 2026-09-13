@@ -1,10 +1,15 @@
 # Knowledge base: defensible publication Directions A and B
 
+**Scope update, 13 September 2026:** the final publication uses the existing
+README, fact sheets, and numeric package for A and B1. The article outlines and
+B2 measurements below are earlier options, not planned work. See the
+[decision record](adr/0002-issue-33-claim-framing.md).
+
 **Prepared 6 September 2026. Purpose:** a factual and editorial foundation for the author, a technical reviewer, and later article drafting. It explains what can be claimed, why, who can use it, and how to present it. It does not supply missing experimental observations.
 
 **Preparation update:** the [Direction A fact sheet](publication/direction-a/fact-sheet.md), [Direction B scoring fact sheet](publication/direction-a/scorer-fact-sheet.md), [small-step walkthrough and reproduction package](publication/direction-a/README.md), and [publication examples](publication/publication-examples.md) are now prepared. The package includes all visible numeric scores, one figure, and a CPU-only check of the arithmetic. You do not need to build these materials yourself.
 
-**Direction A:** how to decide whether a fine-tuned checkpoint meets an acceptance contract. The current record supports a bounded engineering case study after corrections and evidence packaging.
+**Direction A:** whether a fine-tuned checkpoint meets an acceptance contract. The checked case study and numeric package are available.
 
 **Direction B:** how to determine what an injection score measures. The current record supports a code-level audit and some limited deductions from retained scores. A behavioral explanation of the checkpoints requires new output-retaining evaluation.
 
@@ -47,7 +52,7 @@ OPI, each Tensor Trust benchmark, and MMLU have 300 items; GSM8K and IFEval have
 
 The original baseline plus three runs account for approximately **47.3381 GPU-accounted hours**. Approximately **59.87 hours** additionally includes the later corpus ablation and two MMLU diagnostic passes; it is not a reconciled total of every smoke and auxiliary cost. Some durations are derived from active wall time. Peak memory was **15.663 GiB**, above the declared 15.5 GiB allocation but within the RTX 4080's memory. Execution on the card was feasible; universal resource compliance was not demonstrated.
 
-Direct sources: [frozen protocol](C:/Projects/aar-prompt-injection-16gb-gpu/protocol/manifest.json), [claim report](C:/Projects/aar-prompt-injection-16gb-gpu/analysis/attempt1-claim-report.json), [integrity report](C:/Projects/aar-prompt-injection-16gb-gpu/analysis/attempt1-integrity-report.json), and [selection implementation](C:/Projects/aar-prompt-injection-16gb-gpu/runner/selection.py).
+Direct sources: [frozen protocol](../protocol/manifest.json), [claim report](../analysis/attempt1-claim-report.json), [integrity report](../analysis/attempt1-integrity-report.json), and [selection implementation](../runner/selection.py).
 
 ## 3. Scientific positioning for both directions
 
@@ -146,7 +151,7 @@ Tensor Trust stores the average of two binary arms: attack resistance `R` and su
 
 The middle two cases become indistinguishable when only the average is saved. Both-arm success concerns the associated attack and control prompts, not successful completion of one legitimate task under attack. It is useful evidence, but is not equivalent to SecFid-style fidelity.
 
-Sources: [local scorer](C:/Projects/aar-prompt-injection-16gb-gpu/runner/real_adapters.py:304), [evaluation outcome retention](C:/Projects/aar-prompt-injection-16gb-gpu/runner/evaluation.py:116), and [upstream benchmark explanation](https://github.com/YuehHanChen/automated_alignment_researcher/blob/1899ad64fbfbc65790d259471cc4bf4de9437aa9/benchmark_docs/prompt_injection/bench_explanation.md).
+Sources: [local scorer](../runner/real_adapters.py), [evaluation outcome retention](../runner/evaluation.py), and [upstream benchmark explanation](https://github.com/YuehHanChen/automated_alignment_researcher/blob/1899ad64fbfbc65790d259471cc4bf4de9437aa9/benchmark_docs/prompt_injection/bench_explanation.md).
 
 ### A concrete audit result already available without new model evaluation
 
@@ -269,13 +274,13 @@ For two articles, A can lead readers through the acceptance decision and link to
 
 | Source | Role and caution |
 |---|---|
-| [Manifest](C:/Projects/aar-prompt-injection-16gb-gpu/protocol/manifest.json) | Declared model, samples, recipe, decoding, thresholds. |
-| [Claim report](C:/Projects/aar-prompt-injection-16gb-gpu/analysis/attempt1-claim-report.json) | Full benchmark table and recorded paired statistical analyses. |
-| [Integrity report](C:/Projects/aar-prompt-injection-16gb-gpu/analysis/attempt1-integrity-report.json) | Resource totals and Tensor Trust category counts; categorical mechanism verdicts need the correction in §5. |
-| [Claim-framing ADR](C:/Projects/aar-prompt-injection-16gb-gpu/docs/adr/0002-issue-33-claim-framing.md) | Four analysis hashes and unresolved framing decisions; does not override code. |
-| [Scorer](C:/Projects/aar-prompt-injection-16gb-gpu/runner/real_adapters.py:304) | Exact OPI and Tensor Trust score construction. |
-| [Selection](C:/Projects/aar-prompt-injection-16gb-gpu/runner/selection.py) | Eligibility, ranking, meaningful-improvement flag, null result. |
-| [Report assembly](C:/Projects/aar-prompt-injection-16gb-gpu/runner/publication_gate_run.py) | Demonstrates which gitignored inputs full regeneration requires. |
+| [Manifest](../protocol/manifest.json) | Declared model, samples, recipe, decoding, thresholds. |
+| [Claim report](../analysis/attempt1-claim-report.json) | Full benchmark table and recorded paired statistical analyses. |
+| [Integrity report](../analysis/attempt1-integrity-report.json) | Resource totals and Tensor Trust category counts; categorical mechanism verdicts need the correction in §5. |
+| [Claim-framing ADR](adr/0002-issue-33-claim-framing.md) | Final scope decision, with historical options and four analysis hashes preserved. |
+| [Scorer](../runner/real_adapters.py) | Exact OPI and Tensor Trust score construction. |
+| [Selection](../runner/selection.py) | Eligibility, ranking, meaningful-improvement flag, null result. |
+| [Report assembly](../runner/publication_gate_run.py) | Demonstrates which gitignored inputs full regeneration requires. |
 | [Pinned upstream MMLU](https://github.com/YuehHanChen/automated_alignment_researcher/blob/1899ad64fbfbc65790d259471cc4bf4de9437aa9/aar/benchmarks/mmlu/benchmark.py) | Resolves the erroneous generated-text-scoring disclosure. |
 
 The following **CPU-only arithmetic example** can use the committed count tables. It checks the 17/18 comparison and the component bounds without model weights. It does not independently establish the counts from original observations or regenerate the whole report; that requires the visible per-item inputs.
@@ -284,7 +289,7 @@ The following **CPU-only arithmetic example** can use the committed count tables
 import json
 from pathlib import Path
 
-root = Path(r"C:\Projects\aar-prompt-injection-16gb-gpu")
+root = Path.cwd()  # Run from the repository root.
 report = json.loads((root / "analysis/attempt1-integrity-report.json").read_text())
 tt = report["failure_mode_evidence"]["tensor_trust_degeneracy"]
 rows = tt["per_run"]
@@ -308,6 +313,6 @@ for label in ("baseline_distribution", "trained_distribution"):
 
 Expected output: `17 of 18`; baseline bounds `34.00% to 85.67%`; checkpoint bounds `27.00% to 86.00%`.
 
-The additional paired-transition check used only the visible Tensor Trust extraction scores in [baseline metrics](C:/Projects/aar-prompt-injection-16gb-gpu/runs/real-baseline-20260829-205020/metrics.json) and [run 42 epoch 3 metrics](C:/Projects/aar-prompt-injection-16gb-gpu/runs/eval-seed42-epoch3-20260831-201248-1b487000/metrics.json), paired by item ID. These files are local evidence, not a promise that a public checkout includes them.
+The additional paired-transition check used only the visible Tensor Trust extraction scores in baseline metrics (`runs/real-baseline-20260829-205020/metrics.json`, local only) and run 42 epoch 3 metrics (`runs/eval-seed42-epoch3-20260831-201248-1b487000/metrics.json`, local only), paired by item ID. These files are local evidence, not a promise that a public checkout includes them.
 
-**Maintenance boundary:** this knowledge base records interpretation and presentation guidance. It does not change the frozen evidence, retroactively repair the historical experiment, authorize a held-out reveal, or mark the publication package complete. The next drafting pass should use its corrected scope rather than copying contradictory claims from older summaries.
+**Scope:** this document preserves the evidence and earlier publication options. The final scope is the existing README, fact sheets, and numeric package. New measurements and separate articles are outside that scope.

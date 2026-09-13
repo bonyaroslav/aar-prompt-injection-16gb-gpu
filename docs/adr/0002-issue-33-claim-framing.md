@@ -1,12 +1,21 @@
 # ADR 0002: Issue #33 results-document claim framing
 
-**Status:** OPEN — fact base frozen, verdict deferred to an independent validation
-pass. This ADR records the option space and the evidence; it does **not** choose.
-Issue #33 stays open until the sign-off block below is filled.
+**Status: scope decided, 13 September 2026.** The maintainer chose a minimal
+publication using the existing README, checked fact sheets, and numeric
+reanalysis package. The claims are the checkpoint rejection result (Direction A)
+and scoring audit (B1). Behavioral causes remain unresolved; B2, a separate
+article, and a website are outside this scope.
 
-**Decides (eventually):** how issue #33's committed results document
-(`analysis/results.md`, not yet written) states its scientific claim, given that
-both wording triggers in the issue body have now resolved.
+This replaces the earlier publication plan below. It does not mark its validation
+checklist as passed, create a release, or close the GitHub issue. The checked
+[fact sheet](../publication/direction-a/fact-sheet.md) and
+[scoring audit](../publication/direction-a/scorer-fact-sheet.md) supersede conflicting
+historical interpretations.
+
+## Historical proposal — superseded
+
+The remaining text preserves the original issue #33 options, evidence hashes,
+and uncompleted sign-off. It is a historical record, not a current work plan.
 
 ## Context
 

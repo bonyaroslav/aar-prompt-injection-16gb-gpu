@@ -13,10 +13,8 @@ below explain that connection and the role of SecFid in interpreting the results
 **All nine checkpoints increased the visible OPI score but failed the
 generation-scored acceptance gates. No checkpoint was selected.**
 
-All nine trained checkpoints failed a frozen capability contract whose binding gates were generation-scored.
-The contract was fixed before the main runs. No held-out comparison was revealed.
-This is a negative selection result for one recipe, not a finding that training
-had no effect or that fine-tuning fails in general.
+The acceptance rules were fixed before the main runs. No held-out comparison
+was revealed. The result applies to this recipe and evaluation setup.
 
 ## Start here
 
@@ -25,14 +23,7 @@ had no effect or that fine-tuning fails in general.
 - **Check what the scores mean:** [scoring audit](docs/publication/direction-a/scorer-fact-sheet.md).
 - **Recalculate the tables without a GPU:** [small reproduction package](docs/publication/direction-a/README.md).
 
-These checked materials supersede conflicting interpretations in older narrative
-summaries. The reader's guide is also the entry point for the future project website.
-
-**Project website:** planned. For now, [start with the reader's guide](docs/START_HERE.md).
-<!-- Website placeholder: replace this line and the GitHub About website URL
-     when a public project page is available. Do not add a guessed deployment URL. -->
-<!-- Social-preview placeholder: docs/publication/assets/social-preview-placeholder.svg.
-     Preparation and upload details: docs/publication/repository-presentation.md. -->
+These checked materials supersede conflicting interpretations in older summaries.
 
 ## Scientific foundations
 
@@ -42,25 +33,18 @@ this independent study:
 1. **Original inspiration and evaluation setting — Chen Yueh-Han, Jiaxin Wen,
    and Jan Hendrik Kirchner (2026),
    [Automated Researchers Can Mitigate Well-Characterized Alignment Failures](https://alignment.anthropic.com/2026/automated-alignment-researchers/).**
-   This Anthropic Fellows study investigates automated researchers that propose
-   and iteratively test alignment-training methods while preserving general
-   capability. It inspired this project and supplied the evaluation setting
-   adapted through the [pinned upstream harness](https://github.com/YuehHanChen/automated_alignment_researcher/tree/1899ad64fbfbc65790d259471cc4bf4de9437aa9).
-   Our experiment tests one response-only QLoRA recipe on a smaller model and
-   consumer GPU; it does not reproduce or refute the paper's iterative method search.
+   This study inspired the project and supplied its evaluation setting through
+   the [pinned upstream harness](https://github.com/YuehHanChen/automated_alignment_researcher/tree/1899ad64fbfbc65790d259471cc4bf4de9437aa9).
+   Our experiment uses the same prompt-injection target, Qwen3.5-2B, on a
+   consumer GPU. It tests one recipe, not the paper's iterative method search.
 
 2. **Framework for interpreting the scores — Mitchell Hermon, Rahul Gupta,
    Weitong Ruan, Ekraam Sabir, and Haohan Wang (2026),
    [Security–Fidelity Tradeoffs: The Hidden Cost of Prompt Injection Defense (SecFid)](https://arxiv.org/abs/2606.30783).**
-   Accepted at ICML 2026; first submitted to arXiv on **29 June 2026**.
    SecFid distinguishes executing an injected instruction, processing it as task
-   data, and ignoring it. This motivates our distinction between avoiding an
-   attacker's target and completing the user's legitimate task. It is a central
-   foundation for the [scoring audit](docs/publication/direction-a/scorer-fact-sheet.md),
-   rather than evidence that our checkpoints suppressed content or refused:
-   their historical generated outputs were not retained.
-
-The local study is not affiliated with or endorsed by either research team.
+   data, and ignoring it. It informed our [scoring audit](docs/publication/direction-a/scorer-fact-sheet.md).
+   It cannot explain these checkpoints' behavior: their generated outputs were
+   not retained.
 
 ---
 
@@ -77,7 +61,7 @@ The local study is not affiliated with or endorsed by either research team.
 | Compute | **47.3381 GPU-accounted hours** for the main baseline plus three runs; the ≈59.87 figure also includes later diagnostic/ablation work |
 | Peak VRAM | 15.663 GiB against a declared 15.5 GiB allocation — **over budget, inside the card**, reported as a feasibility finding |
 
-Epoch-3 change against the frozen baseline, per run:
+Epoch-3 change against the frozen baseline, in score units (0.01 = 1 percentage point):
 
 | Benchmark | Evaluation modality | seed 17 | seed 42 | seed 2026 |
 |---|---|---:|---:|---:|
@@ -117,18 +101,13 @@ Detailed evidence and scientific positioning are in the
 
 ---
 
-## What this study does **not** claim
+## Scope
 
-- No efficacy claim. This is not a working defence, and no checkpoint is recommended
-  for any use.
-- No held-out generalization claim. No baseline-versus-trained InjecAgent
-  comparison was revealed, and none may be inferred from the visible scores.
-- No adaptive-attack claim. No attacker who knows about this intervention was ever run.
-- No claim that response-only QLoRA fails in general, and no claim about any other
-  model, scale, corpus, or recipe.
-- No population-level inference from three runs.
-
-**No model is released.** A checkpoint the protocol rejected is not a shippable artifact.
+This is a case study of one recipe, with three related training trajectories
+and one shared baseline. Results are descriptive, not population estimates.
+They establish neither an effective defense nor a general failure of QLoRA.
+No held-out comparison or adaptive-attack evaluation is reported.
+**No model is released.**
 
 ---
 
@@ -145,12 +124,9 @@ This recalculates the fact sheet and score/decision tables and checks them again
 the historical records. Figure and optional paired-interval reproduction commands
 are in the [package README](docs/publication/direction-a/README.md).
 
-The older `runner.publication_gate_run` path assembles the full reports from
-gitignored run metrics, logs, telemetry, recovery records, and corpus files.
-It cannot reproduce those reports from committed aggregates alone. Historical
-report identities remain recorded in the
-[ADR](docs/adr/0002-issue-33-claim-framing.md); the
-[validation guide](docs/issue-33-validation-guide.md) describes the local-input path.
+Full historical report assembly requires local run files, logs, and corpus data;
+see the [validation guide](docs/issue-33-validation-guide.md). The public package
+reproduces the numeric reanalysis, not training or missing outputs.
 
 Tests:
 
@@ -158,17 +134,13 @@ Tests:
 python -m pytest tests/ -q
 ```
 
-Execution evidence (`runs/`, `diagnostics/`, `ablation/`) is deliberately not in
-version control — the main bundle snapshot is ~31.7 GiB. The new publication
-folder provides the small visible-score subset needed for its own reanalysis.
-It does not recreate missing outputs or retrain the original models.
+Execution bundles (`runs/`, `diagnostics/`, `ablation/`) are not in version control.
 
 ---
 
 ## Execution limits and corrected disclosures
 
-The frozen integrity report contains historical disclosures and interpretations.
-The corrected distinctions for publication are:
+These disclosures correct earlier summaries:
 
 1. **Runs are not reproducible from the recorded seed.** Adapter initialisation happens
    before the run seed is applied, so that seed does not determine the initial adapter weights.
@@ -206,16 +178,14 @@ Two additional caveats a reader should carry:
 | Path | Contents |
 |---|---|
 | `protocol/` | The frozen manifest, its digests, held-out sealing policy, deviations, and separately versioned diagnostic/ablation protocols |
-| `runner/` | Stage runners and pure analysis transforms (~8.4k lines) |
+| `runner/` | Stage runners and analysis transforms |
 | `training_data/` | Corpus builder — deduplicated against every visible eval set; InjecAgent never touched by construction |
 | `analysis/` | Committed fact base: claim report, integrity report, frozen input record, provenance manifest, per-seed summaries |
 | `docs/` | One decision record per closed ticket, ADRs, handovers, and the issue-33 framing set |
-| `tests/` | 30 offline test modules |
+| `tests/` | Offline tests |
 | `RESEARCH_PLAN.md` | The running project log |
 | `CITATION.cff` | Citation metadata for this research software and its scientific references |
 | `LICENSE` / `LICENSE_SCOPE.md` | MIT license for original contributions and third-party scope notes |
-
-Start here: [checked fact sheet](docs/publication/direction-a/fact-sheet.md).
 
 ---
 
@@ -234,10 +204,10 @@ assistant instructions retain their own terms; see [license scope](LICENSE_SCOPE
 
 ## Status
 
-The frozen replication set `[17, 42, 2026]` is complete. The analysis chain
-(issues #27–#32) is closed. Issue #33 — the results document and evidence package —
-remains open. The Direction A fact sheet and reader reanalysis package now exist.
-The broader publication decisions remain in
-[`docs/adr/0002-issue-33-claim-framing.md`](docs/adr/0002-issue-33-claim-framing.md).
-New model measurements are needed for a behavioral explanation, not for the
-bounded account of the existing rejection decision.
+The three-run experiment is complete. The final publication scope is this
+README, the checked fact sheets, and the numeric reanalysis package: the
+checkpoint rejection result and scoring audit. Behavioral explanations remain
+unresolved; new experiments and a separate website are outside this scope.
+
+The [scope decision](docs/adr/0002-issue-33-claim-framing.md) supersedes the earlier
+publication plan. It does not certify the old issue #33 checklist as completed.
