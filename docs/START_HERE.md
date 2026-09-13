@@ -9,6 +9,7 @@ was selected. The result is specific to this recipe and evaluation setup.
 
 | What you want to know | Read |
 |---|---|
+| Why I ran this, and what I got wrong | [Personal retrospective](retrospective.md) |
 | What was tested, and what happened? | [Checked fact sheet](publication/direction-a/fact-sheet.md) |
 | What do the injection scores actually establish? | [Scoring audit](publication/direction-a/scorer-fact-sheet.md) |
 | Can I check the arithmetic myself? | [Reproduction walkthrough](publication/direction-a/README.md) |

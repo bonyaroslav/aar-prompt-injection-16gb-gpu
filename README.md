@@ -5,6 +5,8 @@
 [![Protocol](https://img.shields.io/badge/Protocol-recorded-64748b)](protocol/manifest.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-64748b)](LICENSE)
 
+By **Yaroslav Bondar** · [personal retrospective](docs/retrospective.md)
+
 A single-practitioner study of one response-only QLoRA recipe on a 2B model,
 using an evaluation setup adapted from Anthropic's **Automated Alignment
 Researcher (AAR)** study. The [scientific foundations](#scientific-foundations)
@@ -15,6 +17,12 @@ generation-scored acceptance gates. No checkpoint was selected.**
 
 The acceptance rules were fixed before the main runs. No held-out comparison
 was revealed. The result applies to this recipe and evaluation setup.
+
+![Six benchmark panels across epochs and three runs. OPI scores rise above baseline; all GSM8K and IFEval points are below their required floors. MMLU stays above its floor.](docs/publication/direction-a/figure.png)
+
+*All three runs and every recorded epoch against the shared baseline. Shaded
+regions mark scores below the declared individual task floors. Each line is one
+training run, not independent trials at every epoch.*
 
 ## Start here
 
@@ -128,11 +136,14 @@ Full historical report assembly requires local run files, logs, and corpus data;
 see the [validation guide](docs/issue-33-validation-guide.md). The public package
 reproduces the numeric reanalysis, not training or missing outputs.
 
-Tests:
+Tests (standard library only, no extra packages):
 
 ```bash
-python -m pytest tests/ -q
+python -m unittest discover -s tests
 ```
+
+Expected: `Ran 369 tests ... OK (skipped=1)`. The skip is a `torch` gap on a
+CPU-only environment; an error there means something regressed.
 
 Execution bundles (`runs/`, `diagnostics/`, `ablation/`) are not in version control.
 

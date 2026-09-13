@@ -12,6 +12,8 @@ authors:
 repository-code: "https://github.com/bonyaroslav/aar-prompt-injection-16gb-gpu"
 url: "https://github.com/bonyaroslav/aar-prompt-injection-16gb-gpu"
 license: MIT
+version: 1.0.0
+date-released: 2026-09-13
 abstract: >-
   Research software, protocols, and numeric results for one response-only QLoRA
   recipe on Qwen3.5-2B using an RTX 4080 with 16 GB GPU memory. Three runs produced
